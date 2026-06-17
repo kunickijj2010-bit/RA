@@ -135,6 +135,7 @@ export default function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [newValidatorCode, setNewValidatorCode] = useState('');
+  const [newValidatorSystem, setNewValidatorSystem] = useState('BSP Link');
   const [validatorError, setValidatorError] = useState('');
 
   const [settingsForm, setSettingsForm] = useState({
@@ -173,7 +174,9 @@ export default function App() {
     requested_by: '',
     operator_email: '',
     operator_rocketchat: '',
-    comment: ''
+    comment: '',
+    refund_type: 'вынужденный возврат',
+    support_ticket: ''
   });
 
   const [statusData, setStatusData] = useState({
@@ -301,6 +304,9 @@ export default function App() {
     if (!formData.operator_rocketchat.trim()) {
       errors.operator_rocketchat = 'Username в Rocket Chat обязателен.';
     }
+    if (!formData.support_ticket || !formData.support_ticket.trim()) {
+      errors.support_ticket = 'Номер тикета обязателен.';
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -327,7 +333,7 @@ export default function App() {
           bsp_request_number: '',
           tch_request_number: '',
           system_type: 'BSP Link',
-          validator: validators[0] || 'SU',
+          validator: validators[0]?.code || 'SU',
           request_date: new Date().toISOString().split('T')[0],
           amount_eur: '',
           currency: 'EUR',
@@ -336,7 +342,9 @@ export default function App() {
           requested_by: '',
           operator_email: '',
           operator_rocketchat: '',
-          comment: ''
+          comment: '',
+          refund_type: 'вынужденный возврат',
+          support_ticket: ''
         });
         setFormErrors({});
         fetchRefunds();
@@ -405,7 +413,9 @@ export default function App() {
       requested_by: refund.requested_by,
       operator_email: refund.operator_email || '',
       operator_rocketchat: refund.operator_rocketchat || '',
-      comment: ''
+      comment: '',
+      refund_type: refund.refund_type || 'вынужденный возврат',
+      support_ticket: refund.support_ticket || ''
     });
     setFormErrors({});
     setShowEditModal(true);
@@ -438,6 +448,9 @@ export default function App() {
     if (!formData.operator_rocketchat.trim()) {
       errors.operator_rocketchat = 'Username в Rocket Chat обязателен.';
     }
+    if (!formData.support_ticket || !formData.support_ticket.trim()) {
+      errors.support_ticket = 'Номер тикета обязателен.';
+    }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -464,7 +477,7 @@ export default function App() {
           bsp_request_number: '',
           tch_request_number: '',
           system_type: 'BSP Link',
-          validator: validators[0] || 'SU',
+          validator: validators[0]?.code || 'SU',
           request_date: new Date().toISOString().split('T')[0],
           amount_eur: '',
           currency: 'EUR',
@@ -473,7 +486,9 @@ export default function App() {
           requested_by: '',
           operator_email: '',
           operator_rocketchat: '',
-          comment: ''
+          comment: '',
+          refund_type: 'вынужденный возврат',
+          support_ticket: ''
         });
         setFormErrors({});
         fetchRefunds();
@@ -621,7 +636,10 @@ export default function App() {
       const res = await fetch(`${API_BASE}/validators`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: newValidatorCode.trim() })
+        body: JSON.stringify({ 
+          code: newValidatorCode.trim(),
+          system_type: newValidatorSystem
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -851,7 +869,10 @@ export default function App() {
             <label>Валидатор</label>
             <select className="select-field" value={validatorFilter} onChange={(e) => { setValidatorFilter(e.target.value); setPage(1); }}>
               <option value="">Все валидаторы</option>
-              {validators.map(v => <option key={v} value={v}>{v}</option>)}
+              {validators
+                .filter(v => !systemFilter || v.system_type === systemFilter)
+                .map(v => <option key={v.code} value={v.code}>{v.code}</option>)
+              }
             </select>
           </div>
 
@@ -914,7 +935,12 @@ export default function App() {
                   return (
                     <tr key={refund.id} className={isWarning ? 'warning-row' : ''}>
                       <td style={{ fontWeight: '600' }}>
-                        {refund.ticket_number}
+                        <div>{refund.ticket_number}</div>
+                        {refund.support_ticket && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'normal', marginTop: '2px' }}>
+                            Тикет: {refund.support_ticket}
+                          </div>
+                        )}
                         {isWarning && (
                           <div className="warning-label" title="Статус не менялся более 90 дней">
                             ⚠️ Простой {Math.floor((new Date() - new Date(refund.status_updated_at)) / (1000 * 60 * 60 * 24))} дн.
@@ -923,6 +949,11 @@ export default function App() {
                       </td>
                       <td>
                         <span className="badge badge-system">{refund.system_type} ({refund.validator})</span>
+                        {refund.refund_type && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                            {refund.refund_type}
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div style={{ fontSize: '0.8125rem' }}>
@@ -1079,7 +1110,7 @@ export default function App() {
                 {formErrors.server && <div className="full-width field-error" style={{ fontSize: '0.9rem', background: 'var(--warning-bg)', padding: '0.75rem', borderRadius: '6px' }}>{formErrors.server}</div>}
                 
                 <div className="full-width">
-                  <label>Номер тикета (13 цифр) *</label>
+                  <label>Номер билета (13 цифр) *</label>
                   <input 
                     type="text" 
                     maxLength="13"
@@ -1089,6 +1120,31 @@ export default function App() {
                     onChange={(e) => setFormData({ ...formData, ticket_number: e.target.value.replace(/\D/g, '') })}
                   />
                   {formErrors.ticket_number && <span className="field-error">{formErrors.ticket_number}</span>}
+                </div>
+
+                <div>
+                  <label>Вид возврата *</label>
+                  <select 
+                    className="select-field" 
+                    value={formData.refund_type}
+                    onChange={(e) => setFormData({ ...formData, refund_type: e.target.value })}
+                  >
+                    <option value="вынужденный возврат">Вынужденный возврат</option>
+                    <option value="добровольный возврат">Добровольный возврат</option>
+                  </select>
+                  {formErrors.refund_type && <span className="field-error">{formErrors.refund_type}</span>}
+                </div>
+
+                <div>
+                  <label>Номер тикета *</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Введите номер тикета..."
+                    value={formData.support_ticket}
+                    onChange={(e) => setFormData({ ...formData, support_ticket: e.target.value })}
+                  />
+                  {formErrors.support_ticket && <span className="field-error">{formErrors.support_ticket}</span>}
                 </div>
 
                 <div>
@@ -1108,7 +1164,7 @@ export default function App() {
                   <ValidatorInput 
                     value={formData.validator}
                     onChange={(val) => setFormData({ ...formData, validator: val })}
-                    options={validators}
+                    options={validators.filter(v => v.system_type === formData.system_type).map(v => v.code)}
                   />
                 </div>
 
@@ -1118,7 +1174,7 @@ export default function App() {
                     <input 
                       type="text" 
                       className="input-field" 
-                      placeholder="Например: 1013434733"
+                      placeholder="Например: 400143068"
                       value={formData.bsp_request_number}
                       onChange={(e) => setFormData({ ...formData, bsp_request_number: e.target.value.replace(/\D/g, '') })}
                     />
@@ -1268,7 +1324,7 @@ export default function App() {
                 {formErrors.server && <div className="full-width field-error" style={{ fontSize: '0.9rem', background: 'var(--warning-bg)', padding: '0.75rem', borderRadius: '6px' }}>{formErrors.server}</div>}
                 
                 <div className="full-width">
-                  <label>Номер тикета (13 цифр) *</label>
+                  <label>Номер билета (13 цифр) *</label>
                   <input 
                     type="text" 
                     maxLength="13"
@@ -1278,6 +1334,31 @@ export default function App() {
                     onChange={(e) => setFormData({ ...formData, ticket_number: e.target.value.replace(/\D/g, '') })}
                   />
                   {formErrors.ticket_number && <span className="field-error">{formErrors.ticket_number}</span>}
+                </div>
+
+                <div>
+                  <label>Вид возврата *</label>
+                  <select 
+                    className="select-field" 
+                    value={formData.refund_type}
+                    onChange={(e) => setFormData({ ...formData, refund_type: e.target.value })}
+                  >
+                    <option value="вынужденный возврат">Вынужденный возврат</option>
+                    <option value="добровольный возврат">Добровольный возврат</option>
+                  </select>
+                  {formErrors.refund_type && <span className="field-error">{formErrors.refund_type}</span>}
+                </div>
+
+                <div>
+                  <label>Номер тикета *</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Введите номер тикета..."
+                    value={formData.support_ticket}
+                    onChange={(e) => setFormData({ ...formData, support_ticket: e.target.value })}
+                  />
+                  {formErrors.support_ticket && <span className="field-error">{formErrors.support_ticket}</span>}
                 </div>
 
                 <div>
@@ -1297,7 +1378,7 @@ export default function App() {
                   <ValidatorInput 
                     value={formData.validator}
                     onChange={(val) => setFormData({ ...formData, validator: val })}
-                    options={validators}
+                    options={validators.filter(v => v.system_type === formData.system_type).map(v => v.code)}
                   />
                 </div>
 
@@ -1307,7 +1388,7 @@ export default function App() {
                     <input 
                       type="text" 
                       className="input-field" 
-                      placeholder="Например: 1013434733"
+                      placeholder="Например: 400143068"
                       value={formData.bsp_request_number}
                       onChange={(e) => setFormData({ ...formData, bsp_request_number: e.target.value.replace(/\D/g, '') })}
                     />
@@ -1455,7 +1536,10 @@ export default function App() {
             <form onSubmit={handleUpdateStatus}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <div style={{ fontSize: '0.9375rem' }}>
-                  Изменение статуса для билета: <strong style={{ color: 'var(--accent-color)' }}>{activeRefund?.ticket_number}</strong><br/>
+                  Изменение статуса для билета: <strong style={{ color: 'var(--accent-color)' }}>{activeRefund?.ticket_number}</strong>
+                  {activeRefund?.support_ticket && <span> (Тикет: <strong>{activeRefund?.support_ticket}</strong>)</span>}
+                  <br/>
+                  Вид возврата: <strong>{activeRefund?.refund_type || '—'}</strong><br/>
                   Заявлено: <strong>{activeRefund?.amount} {activeRefund?.currency}</strong>
                 </div>
                 
@@ -1796,7 +1880,7 @@ export default function App() {
                 
                 {/* Form to add validator */}
                 <form onSubmit={handleAddValidator} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-                  <div className="filter-group" style={{ flex: 1 }}>
+                  <div className="filter-group" style={{ flex: 2 }}>
                     <label>Код нового валидатора (например: TK)</label>
                     <input 
                       type="text" 
@@ -1805,6 +1889,18 @@ export default function App() {
                       value={newValidatorCode}
                       onChange={(e) => setNewValidatorCode(e.target.value.toUpperCase())}
                     />
+                  </div>
+                  <div className="filter-group" style={{ flex: 1.5 }}>
+                    <label>Система</label>
+                    <select 
+                      className="select-field" 
+                      value={newValidatorSystem} 
+                      onChange={(e) => setNewValidatorSystem(e.target.value)}
+                      style={{ height: '42px' }}
+                    >
+                      <option value="BSP Link">BSP Link</option>
+                      <option value="TCH Connect">TCH Connect</option>
+                    </select>
                   </div>
                   <button type="submit" className="btn btn-primary" style={{ height: '42px' }}>Добавить</button>
                 </form>
@@ -1821,9 +1917,9 @@ export default function App() {
                   {validators.length === 0 ? (
                     <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Список валидаторов пуст.</div>
                   ) : (
-                    validators.map(code => (
+                    validators.map(v => (
                       <div 
-                        key={code}
+                        key={v.code}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -1832,12 +1928,17 @@ export default function App() {
                           borderBottom: '1px solid var(--border-color)'
                         }}
                       >
-                        <span style={{ fontWeight: '600', fontSize: '1rem' }}>✈️ {code}</span>
+                        <span style={{ fontWeight: '600', fontSize: '1rem' }}>
+                          ✈️ {v.code} 
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '8px', fontWeight: 'normal' }}>
+                            ({v.system_type})
+                          </span>
+                        </span>
                         <button 
                           type="button" 
                           className="btn btn-danger" 
                           style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
-                          onClick={() => handleDeleteValidator(code)}
+                          onClick={() => handleDeleteValidator(v.code)}
                         >
                           Удалить
                         </button>
@@ -1865,7 +1966,10 @@ export default function App() {
             </div>
             <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
               <div style={{ marginBottom: '1.5rem', fontSize: '1rem' }}>
-                Билет: <strong style={{ color: 'var(--accent-color)' }}>{activeRefund?.ticket_number}</strong><br/>
+                Билет: <strong style={{ color: 'var(--accent-color)' }}>{activeRefund?.ticket_number}</strong>
+                {activeRefund?.support_ticket && <span> (Тикет: <strong>{activeRefund?.support_ticket}</strong>)</span>}
+                <br/>
+                Вид возврата: <strong>{activeRefund?.refund_type || '—'}</strong><br/>
                 Текущий статус: <span className={`badge ${getStatusBadgeClass(activeRefund?.status)}`}>{activeRefund?.status}</span>
               </div>
               

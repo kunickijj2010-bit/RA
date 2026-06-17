@@ -142,7 +142,7 @@ async function addInAppNotification(recipient, ticketNumber, message) {
 }
 
 // 4. Combined Notification Trigger when Status Changes
-async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedBy, comment, operatorEmail, operatorRocketChat, operatorName, amount, currency, authorizedAmount, systemType, bspRequestNumber, tchRequestNumber }) {
+async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedBy, comment, operatorEmail, operatorRocketChat, operatorName, amount, currency, authorizedAmount, systemType, bspRequestNumber, tchRequestNumber, refundType, supportTicket }) {
   const commentSection = comment ? `\n\n**Комментарий:**\n${comment}` : '';
   const commentHtml = comment ? `<p><strong>Комментарий:</strong><br/>${comment.replace(/\n/g, '<br/>')}</p>` : '<p><i>Комментарий не указан.</i></p>';
 
@@ -168,7 +168,9 @@ async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedB
   // Text message for Rocket Chat (with mention)
   const mention = operatorRocketChat ? `${operatorRocketChat} ` : '';
   const rcMessage = `🔔 *Изменение статуса возврата!*\n` +
-                    `${mention}Билет: \`${ticketNumber}\`${raDetailsText}\n` +
+                    `${mention}Билет: \`${ticketNumber}\` (Тикет: \`${supportTicket || '—'}\`)\n` +
+                    `Вид возврата: *${refundType || '—'}*` +
+                    `${raDetailsText}\n` +
                     `Статус: *${oldStatus || 'Создан'}* ➡️ *${newStatus}*\n` +
                     `${amountDetailsText}\n` +
                     `Изменил: ${changedBy}${commentSection}`;
@@ -178,7 +180,8 @@ async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedB
   const emailHtml = `
     <h2>Изменение статуса Refund Application</h2>
     <p>Уважаемый оператор,</p>
-    <p>Статус запроса на возврат по билету <strong>${ticketNumber}</strong> был изменен:</p>
+    <p>Статус запроса на возврат по билету <strong>${ticketNumber}</strong> (Номер тикета: <strong>${supportTicket || '—'}</strong>) был изменен:</p>
+    <p>Вид возврата: <strong>${refundType || '—'}</strong></p>
     ${raDetailsHtml}
     <p style="font-size: 16px; background-color: #f3f4f6; padding: 10px; border-radius: 5px; border-left: 4px solid #3b82f6;">
       <strong>${oldStatus || 'Создан'}</strong> &rarr; <strong>${newStatus}</strong>

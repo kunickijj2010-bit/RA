@@ -21,11 +21,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 async function getValidatorsFromDb() {
   const { data, error } = await db
     .from('validators')
-    .select('code')
+    .select('code, system_type')
     .order('code', { ascending: true });
     
   if (error) throw error;
-  return data.map(r => r.code);
+  return data;
 }
 
 // 1. GET /api/refunds - Filtered list of refunds with server-side pagination, search, and warning check
@@ -173,14 +173,16 @@ app.post('/api/refunds', async (req, res) => {
     requested_by,
     operator_email,
     operator_rocketchat,
-    comment
+    comment,
+    refund_type,
+    support_ticket
   } = req.body;
 
   // Basic Validation
   if (!ticket_number || ticket_number.length !== 13 || isNaN(ticket_number)) {
     return res.status(400).json({ error: "Номер билета должен состоять ровно из 13 цифр." });
   }
-  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !requested_by || !operator_rocketchat) {
+  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !requested_by || !operator_rocketchat || !support_ticket) {
     return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
   }
 
@@ -205,7 +207,9 @@ app.post('/api/refunds', async (req, res) => {
           operator_email: operator_email || null,
           operator_rocketchat: operator_rocketchat || null,
           status,
-          status_updated_at: request_date
+          status_updated_at: request_date,
+          refund_type,
+          support_ticket
         }
       ])
       .select('*')
@@ -338,7 +342,9 @@ app.put('/api/refunds/:id/status', async (req, res) => {
         authorizedAmount: parseFloat(authorized_amount || '0'),
         systemType: ticket.system_type,
         bspRequestNumber: ticket.bsp_request_number,
-        tchRequestNumber: ticket.tch_request_number
+        tchRequestNumber: ticket.tch_request_number,
+        refundType: ticket.refund_type,
+        supportTicket: ticket.support_ticket
       }).catch(e => console.error("Notifications triggering error:", e.message));
 
       // Sync updated ticket to Google Sheets
@@ -374,13 +380,15 @@ app.put('/api/refunds/:id', async (req, res) => {
     requested_by,
     operator_email,
     operator_rocketchat,
-    comment
+    comment,
+    refund_type,
+    support_ticket
   } = req.body;
 
   if (!ticket_number || ticket_number.length !== 13 || isNaN(ticket_number)) {
     return res.status(400).json({ error: "Номер билета должен состоять ровно из 13 цифр." });
   }
-  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !requested_by || !operator_rocketchat) {
+  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !requested_by || !operator_rocketchat || !support_ticket) {
     return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
   }
 
@@ -411,6 +419,8 @@ app.put('/api/refunds/:id', async (req, res) => {
         requested_by,
         operator_email: operator_email || null,
         operator_rocketchat: operator_rocketchat || null,
+        refund_type,
+        support_ticket,
         updated_at: new Date().toISOString()
       })
       .eq('id', id);
@@ -632,16 +642,17 @@ app.get('/api/validators', async (req, res) => {
 });
 
 app.post('/api/validators', async (req, res) => {
-  const { code } = req.body;
+  const { code, system_type } = req.body;
   if (!code || !code.trim()) {
     return res.status(400).json({ error: "Код валидатора пуст." });
   }
   const cleanCode = code.trim().toUpperCase();
+  const systemType = system_type || 'BSP Link';
 
   try {
     const { error } = await db
       .from('validators')
-      .insert([{ code: cleanCode }]);
+      .insert([{ code: cleanCode, system_type: systemType }]);
 
     if (error) {
       if (error.code === '23505') {
