@@ -14,6 +14,9 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from the React frontend build folder
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Helper to get all validators from Supabase dynamically
 async function getValidatorsFromDb() {
   const { data, error } = await db
@@ -667,6 +670,11 @@ app.delete('/api/validators/:code', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Catch-all route to serve the React frontend for client-side routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server after initializing database connection
