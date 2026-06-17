@@ -52,7 +52,7 @@ app.get('/api/refunds', async (req, res) => {
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const dateStr = ninetyDaysAgo.toISOString().split('T')[0];
       query = query
-        .not('status', 'in', ['Авторизовано', 'Отклонено', 'авторизовано с расхождением'])
+        .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
         .lte('status_updated_at', dateStr);
     }
 
@@ -115,7 +115,7 @@ app.get('/api/refunds/stats', async (req, res) => {
     const { count: activeWarningsCount, error: warnErr } = await db
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
-      .not('status', 'in', ['Авторизовано', 'Отклонено', 'авторизовано с расхождением'])
+      .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
       .lte('status_updated_at', dateStr);
     if (warnErr) throw warnErr;
 

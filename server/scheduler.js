@@ -20,7 +20,7 @@ async function runScheduler() {
     const { data: rows, error: refErr } = await db
       .from('refund_applications')
       .select('*')
-      .not('status', 'in', ['Авторизовано', 'Отклонено', 'авторизовано с расхождением'])
+      .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
       .lte('status_updated_at', dateStr);
 
     if (refErr) {
