@@ -1,10 +1,7 @@
-const fs = require('fs');
-const path = require('path');
+const { db } = require('./database');
 
-const SETTINGS_PATH = path.join(__dirname, 'settings.json');
-
-function getSettings() {
-  // Default values from process.env if settings.json doesn't exist
+async function getSettings() {
+  // Default values from process.env if settings.json / database doesn't exist
   let settings = {
     smtp_host: process.env.SMTP_HOST || '',
     smtp_port: process.env.SMTP_PORT || '587',
@@ -19,23 +16,42 @@ function getSettings() {
     google_sheets_webhook: process.env.GOOGLE_SHEETS_WEBHOOK || ''
   };
 
-  if (fs.existsSync(SETTINGS_PATH)) {
-    try {
-      const fileContent = fs.readFileSync(SETTINGS_PATH, 'utf8');
-      if (fileContent.trim()) {
-        const fileData = JSON.parse(fileContent);
-        settings = { ...settings, ...fileData };
-      }
-    } catch (e) {
-      console.error("⚠️ Error reading settings.json, reverting to defaults:", e);
+  try {
+    const { data, error } = await db
+      .from('system_settings')
+      .select('*')
+      .eq('id', 1)
+      .single();
+      
+    if (error) {
+      console.warn("⚠️ System settings query failed, falling back to process.env defaults:", error.message);
+      return settings;
     }
+
+    if (data) {
+      // Merge values, overriding defaults only if the database value is not null/empty
+      const dbSettings = {};
+      for (const key of Object.keys(data)) {
+        if (data[key] !== null && data[key] !== undefined && data[key] !== '') {
+          // Special case: handle secure boolean field correctly
+          if (key === 'smtp_secure') {
+            dbSettings[key] = data[key] === true || data[key] === 'true';
+          } else {
+            dbSettings[key] = data[key];
+          }
+        }
+      }
+      settings = { ...settings, ...dbSettings };
+    }
+  } catch (e) {
+    console.error("⚠️ Error fetching settings from DB:", e.message);
   }
   return settings;
 }
 
-function saveSettings(newSettings) {
+async function saveSettings(newSettings) {
   try {
-    const currentSettings = getSettings();
+    const currentSettings = await getSettings();
     
     // Merge new settings. If password is unchanged (comes as masked), preserve old password
     const merged = { ...currentSettings, ...newSettings };
@@ -47,11 +63,30 @@ function saveSettings(newSettings) {
       merged.rocketchat_token = currentSettings.rocketchat_token;
     }
 
-    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2), 'utf8');
-    console.log("💾 Settings saved successfully to settings.json");
+    const updateData = {
+      smtp_host: merged.smtp_host || null,
+      smtp_port: merged.smtp_port || '587',
+      smtp_secure: merged.smtp_secure === 'true' || merged.smtp_secure === true,
+      smtp_user: merged.smtp_user || null,
+      smtp_pass: merged.smtp_pass || null,
+      smtp_from: merged.smtp_from || null,
+      rocketchat_url: merged.rocketchat_url || null,
+      rocketchat_token: merged.rocketchat_token || null,
+      rocketchat_user: merged.rocketchat_user || null,
+      rocketchat_channel: merged.rocketchat_channel || '#refund-alerts',
+      google_sheets_webhook: merged.google_sheets_webhook || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await db
+      .from('system_settings')
+      .upsert({ id: 1, ...updateData }, { onConflict: 'id' });
+
+    if (error) throw error;
+    console.log("💾 Settings saved successfully to Supabase system_settings table.");
     return true;
   } catch (e) {
-    console.error("❌ Error writing settings.json:", e);
+    console.error("❌ Error writing settings to DB:", e);
     return false;
   }
 }

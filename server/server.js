@@ -540,8 +540,8 @@ app.put('/api/notifications/read', async (req, res) => {
 });
 
 // 8. GET /api/settings - Get settings (with masked passwords)
-app.get('/api/settings', (req, res) => {
-  const settings = getSettings();
+app.get('/api/settings', async (req, res) => {
+  const settings = await getSettings();
   const masked = { ...settings };
   if (masked.smtp_pass) masked.smtp_pass = '••••••••';
   if (masked.rocketchat_token) masked.rocketchat_token = '••••••••';
@@ -549,18 +549,18 @@ app.get('/api/settings', (req, res) => {
 });
 
 // 9. PUT /api/settings - Update settings
-app.put('/api/settings', (req, res) => {
-  const success = saveSettings(req.body);
+app.put('/api/settings', async (req, res) => {
+  const success = await saveSettings(req.body);
   if (success) {
     res.json({ success: true, message: "Настройки успешно сохранены." });
   } else {
-    res.status(500).json({ error: "Не удалось сохранить настройки в settings.json" });
+    res.status(500).json({ error: "Не удалось сохранить настройки в базу данных." });
   }
 });
 
 // 10. POST /api/settings/test - Test connection using current form configuration
 app.post('/api/settings/test', async (req, res) => {
-  const currentSettings = getSettings();
+  const currentSettings = await getSettings();
   const testSettings = { ...req.body };
   
   // Resolve masked values

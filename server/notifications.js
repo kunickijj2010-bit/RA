@@ -17,7 +17,7 @@ Details: ${JSON.stringify(details, null, 2)}
 
 // 1. Send Email Notification
 async function sendEmailNotification(to, subject, htmlBody, customSettings) {
-  const config = customSettings || getSettings();
+  const config = customSettings || await getSettings();
 
   if (!config.smtp_host || !config.smtp_user) {
     logNotificationToFile('email', { to, subject, body: htmlBody.replace(/<[^>]*>/g, '') });
@@ -53,7 +53,7 @@ async function sendEmailNotification(to, subject, htmlBody, customSettings) {
 
 // 2. Send Rocket Chat Notification
 async function sendRocketChatNotification(message, recipient, customSettings) {
-  const config = customSettings || getSettings();
+  const config = customSettings || await getSettings();
   const rcUrl = config.rocketchat_url;
   const rcToken = config.rocketchat_token;
   const rcUser = config.rocketchat_user;
@@ -232,7 +232,7 @@ async function notifyInactivity({ ticketNumber, daysInactive, operatorEmail, ope
 
 // 6. Sync Ticket to Google Sheets Webhook (Passing full metadata payload)
 async function syncToGoogleSheets(payload) {
-  const config = getSettings();
+  const config = await getSettings();
   const webhookUrl = config.google_sheets_webhook;
 
   if (!webhookUrl) {
