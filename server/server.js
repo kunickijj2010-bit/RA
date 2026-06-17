@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 // Load env configuration
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -670,6 +671,40 @@ app.delete('/api/validators/:code', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Temporary debug endpoint to inspect logs and configuration
+app.get('/api/debug-logs', (req, res) => {
+  const logPath = path.join(__dirname, 'notifications_log.txt');
+  const settingsPath = path.join(__dirname, 'settings.json');
+  
+  let logContent = 'No logs found.';
+  if (fs.existsSync(logPath)) {
+    logContent = fs.readFileSync(logPath, 'utf8');
+  }
+
+  let settingsContent = 'No settings.json found.';
+  if (fs.existsSync(settingsPath)) {
+    settingsContent = fs.readFileSync(settingsPath, 'utf8');
+  }
+
+  const envVars = {};
+  for (const key of Object.keys(process.env)) {
+    if (key.includes('ROCKETCHAT') || key.includes('SMTP') || key.includes('GOOGLE') || key.includes('SUPABASE')) {
+      // mask sensitive values
+      if (key.includes('PASS') || key.includes('KEY') || key.includes('TOKEN')) {
+        envVars[key] = '••••••••';
+      } else {
+        envVars[key] = process.env[key];
+      }
+    }
+  }
+
+  res.json({
+    logContent,
+    settingsContent,
+    envVars
+  });
 });
 
 // Catch-all route to serve the React frontend for client-side routing
