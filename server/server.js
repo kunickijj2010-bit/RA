@@ -53,7 +53,7 @@ app.get('/api/refunds', async (req, res) => {
       const dateStr = ninetyDaysAgo.toISOString().split('T')[0];
       query = query
         .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
-        .lte('status_updated_at', dateStr);
+        .lte('request_date', dateStr);
     }
 
     // Pending filter: status in progress ('Создан', 'На проверке')
@@ -116,7 +116,7 @@ app.get('/api/refunds/stats', async (req, res) => {
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
       .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
-      .lte('status_updated_at', dateStr);
+      .lte('request_date', dateStr);
     if (warnErr) throw warnErr;
 
     // Total tickets in system

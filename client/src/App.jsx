@@ -717,7 +717,7 @@ export default function App() {
 
   const isTicketWarning = (refund) => {
     if (refund.status === 'Авторизовано' || refund.status === 'Отклонено' || refund.status === 'авторизовано с расхождением') return false;
-    const updated = new Date(refund.status_updated_at);
+    const updated = new Date(refund.request_date);
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     return updated <= ninetyDaysAgo;
@@ -942,8 +942,8 @@ export default function App() {
                           </div>
                         )}
                         {isWarning && (
-                          <div className="warning-label" title="Статус не менялся более 90 дней">
-                            ⚠️ Простой {Math.floor((new Date() - new Date(refund.status_updated_at)) / (1000 * 60 * 60 * 24))} дн.
+                          <div className="warning-label" title="Заявка не завершена более 90 дней">
+                            ⚠️ Простой {Math.floor((new Date() - new Date(refund.request_date)) / (1000 * 60 * 60 * 24))} дн.
                           </div>
                         )}
                       </td>

@@ -21,7 +21,7 @@ async function runScheduler() {
       .from('refund_applications')
       .select('*')
       .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
-      .lte('status_updated_at', dateStr);
+      .lte('request_date', dateStr);
 
     if (refErr) {
       console.error("❌ Scheduler DB error:", refErr);
@@ -39,7 +39,7 @@ async function runScheduler() {
       const currency = row.currency;
 
       // Calculate days inactive using Javascript dates
-      const updatedDate = new Date(row.status_updated_at);
+      const updatedDate = new Date(row.request_date);
       const today = new Date();
       const diffTime = Math.abs(today - updatedDate);
       const daysInactive = Math.floor(diffTime / (1000 * 60 * 60 * 24));
