@@ -57,7 +57,12 @@ async function sendRocketChatNotification(message, recipient, customSettings) {
   const rcUrl = config.rocketchat_url;
   const rcToken = config.rocketchat_token;
   const rcUser = config.rocketchat_user;
-  const rcChannel = recipient || config.rocketchat_channel || '#refund-alerts';
+  let rcChannel = recipient || config.rocketchat_channel || '#refund-alerts';
+
+  // Auto-prepend '@' for usernames if missing prefix
+  if (rcChannel && !rcChannel.startsWith('#') && !rcChannel.startsWith('@')) {
+    rcChannel = `@${rcChannel}`;
+  }
 
   if (!rcUrl) {
     logNotificationToFile('rocket_chat', { channel: rcChannel, message });
@@ -166,7 +171,10 @@ async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedB
   }
 
   // Text message for Rocket Chat (with mention)
-  const mention = operatorRocketChat ? `${operatorRocketChat} ` : '';
+  let mention = '';
+  if (operatorRocketChat) {
+    mention = operatorRocketChat.startsWith('@') ? `${operatorRocketChat} ` : `@${operatorRocketChat} `;
+  }
   const rcMessage = `🔔 *Изменение статуса возврата!*\n` +
                     `${mention}Билет: \`${ticketNumber}\` (Тикет: \`${supportTicket || '—'}\`)\n` +
                     `Вид возврата: *${refundType || '—'}*` +
@@ -208,7 +216,10 @@ async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedB
 
 // 5. Combined Notification Trigger for Inactivity Warning (3 months)
 async function notifyInactivity({ ticketNumber, daysInactive, operatorEmail, operatorRocketChat, operatorName, amount, currency }) {
-  const mention = operatorRocketChat ? `${operatorRocketChat} ` : '';
+  let mention = '';
+  if (operatorRocketChat) {
+    mention = operatorRocketChat.startsWith('@') ? `${operatorRocketChat} ` : `@${operatorRocketChat} `;
+  }
   const rcMessage = `⚠️ *ПРЕДУПРЕЖДЕНИЕ О ПРОСТОЕ!*\n` +
                     `${mention}Билет: \`${ticketNumber}\` (${amount} ${currency})\n` +
                     `Статус не менялся уже *${daysInactive} дней*.\n` +
