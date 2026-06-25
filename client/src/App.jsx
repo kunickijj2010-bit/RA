@@ -92,11 +92,14 @@ function ValidatorInput({ value, onChange, options }) {
 
 export default function App() {
   // Authentication State
-  const [token, setToken] = useState(localStorage.getItem('refunds_jwt_token') || null);
+  const [token, setToken] = useState(() => {
+    const saved = localStorage.getItem('refunds_jwt_token');
+    return (saved && saved !== 'null' && saved !== 'undefined') ? saved : null;
+  });
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('refunds_user');
     try {
-      return saved ? JSON.parse(saved) : null;
+      return (saved && saved !== 'null' && saved !== 'undefined') ? JSON.parse(saved) : null;
     } catch {
       return null;
     }
