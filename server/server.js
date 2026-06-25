@@ -211,9 +211,15 @@ app.get('/api/refunds', authenticateToken, async (req, res) => {
   const dateEnd = req.query.date_end || '';
   const onlyWarnings = req.query.only_warnings === 'true';
   const onlyPending = req.query.only_pending === 'true';
+  const onlyMine = req.query.only_mine === 'true';
 
   try {
     let query = db.from('refund_applications').select('*', { count: 'exact' });
+
+    // Filter by user's own requests
+    if (onlyMine && req.user) {
+      query = query.eq('requested_by', req.user.full_name);
+    }
 
     // Warning filter: status in progress and updated more than 90 days ago
     if (onlyWarnings) {

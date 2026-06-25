@@ -133,6 +133,7 @@ export default function App() {
   const [dateEnd, setDateEnd] = useState('');
   const [onlyWarningsFilter, setOnlyWarningsFilter] = useState(false);
   const [onlyPendingFilter, setOnlyPendingFilter] = useState(false);
+  const [onlyMineFilter, setOnlyMineFilter] = useState(false);
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -245,7 +246,7 @@ export default function App() {
       fetchRefunds();
       fetchStats();
     }
-  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter]);
+  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter]);
 
   useEffect(() => {
     if (token) {
@@ -337,7 +338,8 @@ export default function App() {
         date_start: dateStart,
         date_end: dateEnd,
         only_warnings: onlyWarningsFilter ? 'true' : 'false',
-        only_pending: onlyPendingFilter ? 'true' : 'false'
+        only_pending: onlyPendingFilter ? 'true' : 'false',
+        only_mine: onlyMineFilter ? 'true' : 'false'
       });
       const res = await apiFetch(`/refunds?${query}`);
       const data = await res.json();
@@ -676,6 +678,7 @@ export default function App() {
     setDateEnd('');
     setOnlyWarningsFilter(false);
     setOnlyPendingFilter(false);
+    setOnlyMineFilter(false);
     setPage(1);
   };
 
@@ -1212,7 +1215,20 @@ export default function App() {
             <input type="date" className="input-field" value={dateEnd} onChange={(e) => { setDateEnd(e.target.value); setPage(1); }} />
           </div>
 
-          <div className="filters-actions">
+          <div className="filter-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.6rem' }}>
+            <input 
+              type="checkbox" 
+              id="onlyMineFilter"
+              checked={onlyMineFilter} 
+              onChange={(e) => { setOnlyMineFilter(e.target.checked); setPage(1); }} 
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent-color)' }}
+            />
+            <label htmlFor="onlyMineFilter" style={{ cursor: 'pointer', margin: 0, userSelect: 'none', fontWeight: '600', color: 'var(--text-primary)' }}>
+              Только мои заявки
+            </label>
+          </div>
+
+          <div className="filters-actions" style={{ marginTop: '1.6rem' }}>
             <button className="btn btn-secondary" onClick={clearFilters}>Сбросить</button>
           </div>
         </div>
@@ -1314,7 +1330,26 @@ export default function App() {
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontSize: '0.875rem' }}>{refund.requested_by}</div>
+                        <div style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{refund.requested_by}</span>
+                          {user && refund.requested_by === user.full_name && (
+                            <span 
+                              style={{ 
+                                fontSize: '0.7rem', 
+                                padding: '1px 5px', 
+                                background: 'rgba(34, 197, 94, 0.15)', 
+                                border: '1px solid rgba(34, 197, 94, 0.3)', 
+                                borderRadius: '4px', 
+                                color: '#4ade80',
+                                fontWeight: 'bold',
+                                whiteSpace: 'nowrap'
+                              }}
+                              title="Вы создали этот запрос"
+                            >
+                              Мой
+                            </span>
+                          )}
+                        </div>
                         {(refund.operator_email || refund.operator_rocketchat) && (
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                             {refund.operator_email && <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '120px' }}>✉️ {refund.operator_email}</div>}
