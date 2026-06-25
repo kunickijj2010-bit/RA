@@ -668,7 +668,7 @@ app.put('/api/refunds/:id', authenticateToken, async (req, res) => {
 });
 
 // 4c. DELETE /api/refunds/:id - Delete refund application
-app.delete('/api/refunds/:id', authenticateToken, requireAdmin, async (req, res) => {
+app.delete('/api/refunds/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     const { error } = await db
