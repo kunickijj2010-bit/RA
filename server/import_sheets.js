@@ -307,17 +307,17 @@ async function run() {
       for (let idx = 0; idx < header.length; idx++) {
         const h = header[idx].toLowerCase().trim();
         if (!h) {
-          if (idx === 0) colTicket = 0;
-          else if (idx === 2) colRa = 2;
+          if (idx === 0 && colTicket === -1) colTicket = 0;
+          else if (idx === 2 && colRa === -1) colRa = 2;
           continue;
         }
         
         // Ticket number check (must not match otrs ticket# or ticket_id)
-        if (h.includes('билет') || h === 'ticket_number' || h === 'tkt') {
+        if ((h.includes('билет') || h === 'ticket_number' || h === 'tkt') && colTicket === -1) {
           colTicket = idx;
         }
         // OTRS ticket check
-        else if (h.includes('тикет') || h.includes('ticket') || h.includes('otrs') || h.includes('номер заявки')) {
+        else if ((h.includes('тикет') || h.includes('ticket') || h.includes('otrs') || h.includes('номер заявки')) && colOtrs === -1) {
           colOtrs = idx;
         }
         // RA check (both Latin 'ra' and Cyrillic 'ра')
@@ -339,7 +339,7 @@ async function run() {
           cleanH === '400504984' ||
           cleanH === '0400504984';
 
-        if (isRaHeader) {
+        if (isRaHeader && colRa === -1) {
           colRa = idx;
         }
         
@@ -349,30 +349,30 @@ async function run() {
           else colStatusDate = idx;
         }
         // Amount check
-        else if ((h.includes('сумма') || h.includes('amount') || h.includes('price')) && !h.includes('эквивалент') && !h.includes('equivalent')) {
+        else if ((h.includes('сумма') || h.includes('amount') || h.includes('price')) && !h.includes('эквивалент') && !h.includes('equivalent') && colAmount === -1) {
           colAmount = idx;
         }
         // Agent check
-        else if ((h.includes('агент') || h.includes('agent')) && !h.includes('эквивалент') && !h.includes('equivalent')) {
+        else if ((h.includes('агент') || h.includes('agent')) && !h.includes('эквивалент') && !h.includes('equivalent') && colAgent === -1) {
           colAgent = idx;
         }
         // Operator and Modifier check
-        else if ((h.includes('запросил') || h.includes('оператор') || h.includes('сотрудник') || h.includes('кем') || h.includes('кто') || h === 'user') && !h.includes('внес') && !h.includes('внесла')) {
+        else if ((h.includes('запросил') || h.includes('оператор') || h.includes('сотрудник') || h.includes('кем') || h.includes('кто') || h === 'user') && !h.includes('внес') && !h.includes('внесла') && colOperator === -1) {
           colOperator = idx;
         }
-        else if (h.includes('внес') || h.includes('внесла') || h.includes('изменил')) {
+        else if ((h.includes('внес') || h.includes('внесла') || h.includes('изменил')) && colModifier === -1) {
           colModifier = idx;
         }
         // Status check
-        else if (h.includes('авторизац') || h.includes('статус') || h.includes('status') || h.includes('решение')) {
+        else if ((h.includes('авторизац') || h.includes('статус') || h.includes('status') || h.includes('решение')) && colStatus === -1) {
           colStatus = idx;
         }
         // Equivalent check
-        else if (h.includes('эквивалент') || h.includes('equivalent')) {
+        else if ((h.includes('эквивалент') || h.includes('equivalent')) && colEquivalent === -1) {
           colEquivalent = idx;
         }
         // Comment check
-        else if (h.includes('коммент') || h.includes('примечан') || h.includes('comment') || h.includes('note')) {
+        else if ((h.includes('коммент') || h.includes('примечан') || h.includes('comment') || h.includes('note')) && colComment === -1) {
           colComment = idx;
         }
       }
