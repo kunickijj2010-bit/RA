@@ -356,7 +356,16 @@ export default function App() {
 
   const fetchStats = async () => {
     try {
-      const res = await apiFetch('/refunds/stats');
+      const query = new URLSearchParams({
+        search,
+        status: statusFilter,
+        system_type: systemFilter,
+        validator: validatorFilter,
+        date_start: dateStart,
+        date_end: dateEnd,
+        only_mine: onlyMineFilter ? 'true' : 'false'
+      });
+      const res = await apiFetch(`/refunds/stats?${query}`);
       const data = await res.json();
       if (res.ok) {
         setStats(data);

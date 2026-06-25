@@ -197,29 +197,46 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) =
   }
 });
 
-// 1. GET /api/refunds - Filtered list of refunds with server-side pagination, search, and warning check
-app.get('/api/refunds', authenticateToken, async (req, res) => {
-  const page = parseInt(req.query.page || '1');
-  const limit = parseInt(req.query.limit || '10');
-  const offset = (page - 1) * limit;
-
+// Helper to apply filters to a Supabase query
+function applyFilters(query, req) {
   const search = req.query.search || '';
   const status = req.query.status || '';
   const systemType = req.query.system_type || '';
   const validator = req.query.validator || '';
   const dateStart = req.query.date_start || '';
   const dateEnd = req.query.date_end || '';
+  const onlyMine = req.query.only_mine === 'true';
+
+  if (onlyMine && req.user) {
+    query = query.eq('requested_by', req.user.full_name);
+  }
+
+  if (search) {
+    const term = `%${search}%`;
+    query = query.or(`ticket_number.ilike.${term},bsp_request_number.ilike.${term},tch_request_number.ilike.${term},agent_name.ilike.${term},requested_by.ilike.${term},validator.ilike.${term}`);
+  }
+
+  if (status) query = query.eq('status', status);
+  if (systemType) query = query.eq('system_type', systemType);
+  if (validator) query = query.eq('validator', validator);
+
+  if (dateStart) query = query.gte('request_date', dateStart);
+  if (dateEnd) query = query.lte('request_date', dateEnd);
+
+  return query;
+}
+
+// 1. GET /api/refunds - Filtered list of refunds with server-side pagination, search, and warning check
+app.get('/api/refunds', authenticateToken, async (req, res) => {
+  const page = parseInt(req.query.page || '1');
+  const limit = parseInt(req.query.limit || '10');
+  const offset = (page - 1) * limit;
+
   const onlyWarnings = req.query.only_warnings === 'true';
   const onlyPending = req.query.only_pending === 'true';
-  const onlyMine = req.query.only_mine === 'true';
 
   try {
     let query = db.from('refund_applications').select('*', { count: 'exact' });
-
-    // Filter by user's own requests
-    if (onlyMine && req.user) {
-      query = query.eq('requested_by', req.user.full_name);
-    }
 
     // Warning filter: status in progress and updated more than 90 days ago
     if (onlyWarnings) {
@@ -236,20 +253,7 @@ app.get('/api/refunds', authenticateToken, async (req, res) => {
       query = query.in('status', ['Создан', 'На проверке']);
     }
 
-    // Search filter
-    if (search) {
-      const term = `%${search}%`;
-      query = query.or(`ticket_number.ilike.${term},bsp_request_number.ilike.${term},tch_request_number.ilike.${term},agent_name.ilike.${term},requested_by.ilike.${term},validator.ilike.${term}`);
-    }
-
-    // Dropdown filters
-    if (status) query = query.eq('status', status);
-    if (systemType) query = query.eq('system_type', systemType);
-    if (validator) query = query.eq('validator', validator);
-
-    // Date filters
-    if (dateStart) query = query.gte('request_date', dateStart);
-    if (dateEnd) query = query.lte('request_date', dateEnd);
+    query = applyFilters(query, req);
 
     // Order and paginate
     query = query
@@ -277,27 +281,33 @@ app.get('/api/refunds', authenticateToken, async (req, res) => {
 app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
   try {
     // Count total pending
-    const { count: totalPending, error: pendingErr } = await db
+    let queryPending = db
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
       .in('status', ['Создан', 'На проверке']);
+    queryPending = applyFilters(queryPending, req);
+    const { count: totalPending, error: pendingErr } = await queryPending;
     if (pendingErr) throw pendingErr;
 
     // Count 90+ days warning items (in progress)
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const dateStr = ninetyDaysAgo.toISOString().split('T')[0];
-    const { count: activeWarningsCount, error: warnErr } = await db
+    let queryWarn = db
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
       .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
       .lte('request_date', dateStr);
+    queryWarn = applyFilters(queryWarn, req);
+    const { count: activeWarningsCount, error: warnErr } = await queryWarn;
     if (warnErr) throw warnErr;
 
-    // Total tickets in system
-    const { count: totalCreated, error: totalErr } = await db
+    // Total tickets in system matching filters
+    let queryTotal = db
       .from('refund_applications')
       .select('*', { count: 'exact', head: true });
+    queryTotal = applyFilters(queryTotal, req);
+    const { count: totalCreated, error: totalErr } = await queryTotal;
     if (totalErr) throw totalErr;
 
     // Sum of authorized refund amounts grouped by currency
@@ -308,11 +318,14 @@ app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
     let to = 999;
     let hasMore = true;
     while (hasMore) {
-      const { data: batchData, error: authErr } = await db
+      let queryAuth = db
         .from('refund_applications')
         .select('currency, status, amount, authorized_amount')
         .in('status', ['Авторизовано', 'авторизовано с расхождением'])
         .range(from, to);
+      queryAuth = applyFilters(queryAuth, req);
+      
+      const { data: batchData, error: authErr } = await queryAuth;
 
       if (authErr) throw authErr;
       if (!batchData || batchData.length === 0) {
