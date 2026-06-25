@@ -363,7 +363,12 @@ async function run() {
       let parsedCount = 0;
       for (let rIdx = 1; rIdx < rows.length; rIdx++) {
         const row = rows[rIdx];
-        if (row.length === 0 || !row[0]) continue; // Skip empty rows
+        // Stop parsing this tab as soon as we encounter a completely empty row
+        if (row.length === 0 || row.join('').trim() === '') {
+          console.log(`  (Reached empty row at line ${rIdx + 1}, stopping parsing for this tab)`);
+          break;
+        }
+        if (!row[0]) continue; // Skip rows where the first cell is empty
 
         const ticketRaw = colTicket !== -1 ? row[colTicket] : '';
         let ticketNum = ticketRaw.replace(/\D/g, '');
