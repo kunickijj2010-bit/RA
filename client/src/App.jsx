@@ -91,6 +91,20 @@ function ValidatorInput({ value, onChange, options }) {
 }
 
 export default function App() {
+  // Authentication State
+  const [token, setToken] = useState(localStorage.getItem('refunds_jwt_token') || null);
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('refunds_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
   // Core Data State
   const [refunds, setRefunds] = useState([]);
   const [stats, setStats] = useState({
@@ -131,9 +145,7 @@ export default function App() {
   // Admin & Settings State
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState('integration'); // 'integration' | 'validators'
-  const [adminPassword, setAdminPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [settingsTab, setSettingsTab] = useState('integration'); // 'integration' | 'validators' | 'employees'
   const [newValidatorCode, setNewValidatorCode] = useState('');
   const [newValidatorSystem, setNewValidatorSystem] = useState('BSP Link');
   const [validatorError, setValidatorError] = useState('');
@@ -155,6 +167,20 @@ export default function App() {
   const [testing, setTesting] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState({ type: '', text: '' });
 
+  // User Management State
+  const [employees, setEmployees] = useState([]);
+  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState(null);
+  const [employeeFormError, setEmployeeFormError] = useState('');
+  const [employeeFormData, setEmployeeFormData] = useState({
+    username: '',
+    password: '',
+    full_name: '',
+    email: '',
+    rocketchat_username: '',
+    role: 'employee'
+  });
+
   // Active items
   const [activeRefund, setActiveRefund] = useState(null);
   const [history, setHistory] = useState([]);
@@ -165,7 +191,7 @@ export default function App() {
     bsp_request_number: '',
     tch_request_number: '',
     system_type: 'BSP Link',
-    validator: 'SU',
+    validator: '',
     request_date: new Date().toISOString().split('T')[0],
     amount_eur: '', // maps to amount
     currency: 'EUR',
@@ -186,16 +212,114 @@ export default function App() {
     authorized_amount: ''
   });
 
+  // Custom API Fetch Helper
+  const apiFetch = async (endpoint, options = {}) => {
+    const currentToken = localStorage.getItem('refunds_jwt_token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    if (currentToken) {
+      headers['Authorization'] = `Bearer ${currentToken}`;
+    }
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('refunds_jwt_token');
+      localStorage.removeItem('refunds_user');
+      setToken(null);
+      setUser(null);
+      throw new Error("Сессия завершена. Войдите заново.");
+    }
+    return res;
+  };
+
   // Effects
   useEffect(() => {
-    fetchRefunds();
-    fetchStats();
-  }, [page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter]);
+    if (token) {
+      fetchRefunds();
+      fetchStats();
+    }
+  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter]);
 
   useEffect(() => {
-    fetchNotifications();
-    fetchValidators();
-  }, []);
+    if (token) {
+      fetchNotifications();
+      fetchValidators();
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (showAddModal && user) {
+      setFormData(prev => ({
+        ...prev,
+        requested_by: user.full_name,
+        operator_email: user.email || '',
+        operator_rocketchat: user.rocketchat_username || '',
+        ticket_number: '',
+        bsp_request_number: '',
+        tch_request_number: '',
+        system_type: 'BSP Link',
+        validator: '',
+        request_date: new Date().toISOString().split('T')[0],
+        amount_eur: '',
+        currency: 'EUR',
+        agent_refund_equivalent: '',
+        agent_name: '',
+        comment: '',
+        refund_type: 'вынужденный возврат',
+        support_ticket: ''
+      }));
+      setFormErrors({});
+    }
+  }, [showAddModal, user]);
+
+  useEffect(() => {
+    if (showStatusModal && user) {
+      setStatusData(prev => ({
+        ...prev,
+        changed_by: user.full_name
+      }));
+    }
+  }, [showStatusModal, user]);
+
+  useEffect(() => {
+    if (showSettingsModal && settingsTab === 'employees') {
+      fetchEmployees();
+    }
+  }, [showSettingsModal, settingsTab]);
+
+  // Auth Handlers
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Ошибка входа');
+      }
+      localStorage.setItem('refunds_jwt_token', data.token);
+      localStorage.setItem('refunds_user', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (err) {
+      setAuthError(err.message);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('refunds_jwt_token');
+    localStorage.removeItem('refunds_user');
+    setToken(null);
+    setUser(null);
+  };
 
   // API calls
   const fetchRefunds = async () => {
@@ -212,7 +336,7 @@ export default function App() {
         only_warnings: onlyWarningsFilter ? 'true' : 'false',
         only_pending: onlyPendingFilter ? 'true' : 'false'
       });
-      const res = await fetch(`${API_BASE}/refunds?${query}`);
+      const res = await apiFetch(`/refunds?${query}`);
       const data = await res.json();
       if (res.ok) {
         setRefunds(data.data);
@@ -225,7 +349,7 @@ export default function App() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch(`${API_BASE}/refunds/stats`);
+      const res = await apiFetch('/refunds/stats');
       const data = await res.json();
       if (res.ok) {
         setStats(data);
@@ -237,7 +361,7 @@ export default function App() {
 
   const fetchValidators = async () => {
     try {
-      const res = await fetch(`${API_BASE}/validators`);
+      const res = await apiFetch('/validators');
       const data = await res.json();
       if (res.ok) {
         setValidators(data);
@@ -249,7 +373,7 @@ export default function App() {
 
   const fetchNotifications = async () => {
     try {
-      const res = await fetch(`${API_BASE}/notifications`);
+      const res = await apiFetch('/notifications');
       const data = await res.json();
       if (res.ok) {
         setNotifications(data);
@@ -264,9 +388,8 @@ export default function App() {
       const unreadIds = notifications.filter(n => n.is_read === 0).map(n => n.id);
       if (unreadIds.length === 0) return;
 
-      const res = await fetch(`${API_BASE}/notifications/read`, {
+      const res = await apiFetch('/notifications/read', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: unreadIds })
       });
       if (res.ok) {
@@ -320,9 +443,8 @@ export default function App() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/refunds`, {
+      const res = await apiFetch('/refunds', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -366,9 +488,8 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/refunds/${activeRefund.id}/status`, {
+      const res = await apiFetch(`/refunds/${activeRefund.id}/status`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(statusData)
       });
       if (res.ok) {
@@ -386,7 +507,7 @@ export default function App() {
   const viewHistory = async (refund) => {
     setActiveRefund(refund);
     try {
-      const res = await fetch(`${API_BASE}/refunds/${refund.id}/history`);
+      const res = await apiFetch(`/refunds/${refund.id}/history`);
       const data = await res.json();
       if (res.ok) {
         setHistory(data);
@@ -464,9 +585,8 @@ export default function App() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/refunds/${activeRefund.id}`, {
+      const res = await apiFetch(`/refunds/${activeRefund.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -504,7 +624,7 @@ export default function App() {
   const handleDeleteClick = async (refund) => {
     if (!confirm(`Вы действительно хотите удалить заявку по билету ${refund.ticket_number}?`)) return;
     try {
-      const res = await fetch(`${API_BASE}/refunds/${refund.id}`, {
+      const res = await apiFetch(`/refunds/${refund.id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -572,7 +692,7 @@ export default function App() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/settings`);
+      const res = await apiFetch('/settings');
       const data = await res.json();
       if (res.ok) {
         setSettingsForm(data);
@@ -588,9 +708,8 @@ export default function App() {
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/settings`, {
+      const res = await apiFetch('/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsForm)
       });
       if (res.ok) {
@@ -609,9 +728,8 @@ export default function App() {
     setTesting(true);
     setTestLogs(["🔄 Инициализация тестирования..."]);
     try {
-      const res = await fetch(`${API_BASE}/settings/test`, {
+      const res = await apiFetch('/settings/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settingsForm)
       });
       const data = await res.json();
@@ -633,9 +751,8 @@ export default function App() {
     if (!newValidatorCode.trim()) return;
     setValidatorError('');
     try {
-      const res = await fetch(`${API_BASE}/validators`, {
+      const res = await apiFetch('/validators', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code: newValidatorCode.trim(),
           system_type: newValidatorSystem
@@ -657,7 +774,7 @@ export default function App() {
   const handleDeleteValidator = async (code) => {
     if (!confirm(`Удалить валидатор ${code}?`)) return;
     try {
-      const res = await fetch(`${API_BASE}/validators/${code}`, {
+      const res = await apiFetch(`/validators/${code}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -665,6 +782,108 @@ export default function App() {
       }
     } catch (err) {
       console.error("Error deleting validator:", err);
+    }
+  };
+
+  // Employee Management Actions
+  const fetchEmployees = async () => {
+    try {
+      const res = await apiFetch('/users');
+      const data = await res.json();
+      if (res.ok) {
+        setEmployees(data);
+      }
+    } catch (err) {
+      console.error("Error fetching employees:", err);
+    }
+  };
+
+  const handleOpenAddEmployee = () => {
+    setEditingEmployeeId(null);
+    setEmployeeFormData({
+      username: '',
+      password: '',
+      full_name: '',
+      email: '',
+      rocketchat_username: '',
+      role: 'employee'
+    });
+    setEmployeeFormError('');
+    setShowEmployeeForm(true);
+  };
+
+  const handleOpenEditEmployee = (emp) => {
+    setEditingEmployeeId(emp.id);
+    setEmployeeFormData({
+      username: emp.username,
+      password: '',
+      full_name: emp.full_name,
+      email: emp.email || '',
+      rocketchat_username: emp.rocketchat_username || '',
+      role: emp.role
+    });
+    setEmployeeFormError('');
+    setShowEmployeeForm(true);
+  };
+
+  const handleSaveEmployee = async (e) => {
+    e.preventDefault();
+    setEmployeeFormError('');
+
+    if (!employeeFormData.username.trim() || !employeeFormData.full_name.trim() || !employeeFormData.role) {
+      setEmployeeFormError('Пожалуйста, заполните все обязательные поля.');
+      return;
+    }
+    if (!editingEmployeeId && !employeeFormData.password.trim()) {
+      setEmployeeFormError('Пароль обязателен для нового сотрудника.');
+      return;
+    }
+
+    try {
+      const method = editingEmployeeId ? 'PUT' : 'POST';
+      const endpoint = editingEmployeeId ? `/users/${editingEmployeeId}` : '/users';
+      
+      const payload = { ...employeeFormData };
+      if (editingEmployeeId && !payload.password.trim()) {
+        delete payload.password;
+      }
+
+      const res = await apiFetch(endpoint, {
+        method,
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowEmployeeForm(false);
+        fetchEmployees();
+      } else {
+        setEmployeeFormError(data.error || 'Ошибка при сохранении сотрудника.');
+      }
+    } catch (err) {
+      setEmployeeFormError(err.message || 'Ошибка сети при соединении с сервером.');
+    }
+  };
+
+  const handleDeleteEmployee = async (id, fullName) => {
+    if (user && user.id === id) {
+      alert("Вы не можете удалить свою собственную учетную запись.");
+      return;
+    }
+    if (!confirm(`Вы действительно хотите удалить сотрудника ${fullName}?`)) return;
+
+    try {
+      const res = await apiFetch(`/users/${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchEmployees();
+      } else {
+        alert(`Ошибка при удалении: ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Error deleting employee:", err);
+      alert("Ошибка сети при удалении сотрудника.");
     }
   };
 
@@ -725,6 +944,87 @@ export default function App() {
 
   const unreadCount = notifications.filter(n => n.is_read === 0).length;
 
+  if (!token) {
+    return (
+      <div className="login-container" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        backgroundColor: '#0a0d14',
+        fontFamily: 'Inter, sans-serif',
+        padding: '1rem'
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '400px',
+          backgroundColor: '#111827',
+          padding: '2.5rem 2rem',
+          borderRadius: '12px',
+          border: '1px solid #1f2937',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)'
+        }}>
+          <h2 style={{
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            color: '#f9fafb',
+            marginBottom: '0.5rem',
+            textAlign: 'center'
+          }}>Вход в систему</h2>
+          <p style={{
+            fontSize: '0.875rem',
+            color: '#9ca3af',
+            marginBottom: '2rem',
+            textAlign: 'center'
+          }}>Менеджер возвратов BSP Link / TCH Connect</p>
+          
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {authError && (
+              <div style={{
+                color: '#ef4444',
+                fontSize: '0.875rem',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                padding: '0.75rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(239, 68, 68, 0.2)'
+              }}>
+                {authError}
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#d1d5db' }}>Логин</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Введите имя пользователя..."
+                required
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#d1d5db' }}>Пароль</label>
+              <input
+                type="password"
+                className="input-field"
+                placeholder="Введите пароль..."
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+              />
+            </div>
+            
+            <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem', width: '100%' }}>
+              Войти
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* HEADER */}
@@ -735,17 +1035,40 @@ export default function App() {
         </div>
         
         <div className="header-actions">
+          {/* User Profile Info and Logout */}
+          {user && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginRight: '0.5rem', borderRight: '1px solid var(--border-color)', paddingRight: '1rem' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: 'var(--text-primary)' }}>{user.full_name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{user.role === 'admin' ? 'Администратор' : 'Сотрудник'}</div>
+              </div>
+              <button 
+                onClick={handleLogout}
+                className="btn btn-secondary" 
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.8125rem' }}
+              >
+                Выйти
+              </button>
+            </div>
+          )}
+
           {/* Admin Panel Gear Button */}
-          <button 
-            className="bell-button" 
-            title="Настройки оповещений и справочников (Админка)"
-            onClick={() => setShowLoginModal(true)}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+          {user && user.role === 'admin' && (
+            <button 
+              className="bell-button" 
+              title="Настройки оповещений и справочников (Админка)"
+              onClick={() => {
+                setSettingsTab('integration');
+                loadSettings();
+                setShowSettingsModal(true);
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+          )}
 
           {/* Bell Icon Notification dropdown */}
           <div className="bell-container">
@@ -1023,19 +1346,21 @@ export default function App() {
                               <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                             </svg>
                           </button>
-                          <button 
-                            className="btn-icon delete-action" 
-                            title="Удалить заявку"
-                            onClick={() => handleDeleteClick(refund)}
-                            style={{ color: '#ef4444' }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="3 6 5 6 21 6"/>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                              <line x1="10" y1="11" x2="10" y2="17"/>
-                              <line x1="14" y1="11" x2="14" y2="17"/>
-                            </svg>
-                          </button>
+                          {user && user.role === 'admin' && (
+                            <button 
+                              className="btn-icon delete-action" 
+                              title="Удалить заявку"
+                              onClick={() => handleDeleteClick(refund)}
+                              style={{ color: '#ef4444' }}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                <line x1="10" y1="11" x2="10" y2="17"/>
+                                <line x1="14" y1="11" x2="14" y2="17"/>
+                              </svg>
+                            </button>
+                          )}
                           <button 
                             className="btn-icon info-action" 
                             title="История изменений"
@@ -1259,6 +1584,7 @@ export default function App() {
                     placeholder="Например: Гончарова О."
                     value={formData.requested_by} 
                     onChange={(e) => setFormData({ ...formData, requested_by: e.target.value })} 
+                    disabled={user && user.role !== 'admin'}
                   />
                   {formErrors.requested_by && <span className="field-error">{formErrors.requested_by}</span>}
                 </div>
@@ -1271,6 +1597,7 @@ export default function App() {
                     placeholder="operator@corporate.ru"
                     value={formData.operator_email} 
                     onChange={(e) => setFormData({ ...formData, operator_email: e.target.value })} 
+                    disabled={user && user.role !== 'admin'}
                   />
                 </div>
 
@@ -1282,6 +1609,7 @@ export default function App() {
                     placeholder="Например: @username"
                     value={formData.operator_rocketchat} 
                     onChange={(e) => setFormData({ ...formData, operator_rocketchat: e.target.value })} 
+                    disabled={user && user.role !== 'admin'}
                   />
                   {formErrors.operator_rocketchat && <span className="field-error">{formErrors.operator_rocketchat}</span>}
                 </div>
@@ -1473,6 +1801,7 @@ export default function App() {
                     placeholder="Например: Гончарова О."
                     value={formData.requested_by} 
                     onChange={(e) => setFormData({ ...formData, requested_by: e.target.value })} 
+                    disabled={user && user.role !== 'admin'}
                   />
                   {formErrors.requested_by && <span className="field-error">{formErrors.requested_by}</span>}
                 </div>
@@ -1485,6 +1814,7 @@ export default function App() {
                     placeholder="operator@corporate.ru"
                     value={formData.operator_email} 
                     onChange={(e) => setFormData({ ...formData, operator_email: e.target.value })} 
+                    disabled={user && user.role !== 'admin'}
                   />
                 </div>
 
@@ -1496,6 +1826,7 @@ export default function App() {
                     placeholder="Например: @username"
                     value={formData.operator_rocketchat} 
                     onChange={(e) => setFormData({ ...formData, operator_rocketchat: e.target.value })} 
+                    disabled={user && user.role !== 'admin'}
                   />
                   {formErrors.operator_rocketchat && <span className="field-error">{formErrors.operator_rocketchat}</span>}
                 </div>
@@ -1686,6 +2017,22 @@ export default function App() {
                 }}
               >
                 ✈️ Справочник Валидаторов
+              </button>
+              <button 
+                type="button"
+                onClick={() => setSettingsTab('employees')}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  border: 'none',
+                  borderBottom: settingsTab === 'employees' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                  background: 'none',
+                  color: settingsTab === 'employees' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.875rem'
+                }}
+              >
+                👥 Сотрудники
               </button>
             </div>
 
@@ -1945,6 +2292,174 @@ export default function App() {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: EMPLOYEES */}
+            {settingsTab === 'employees' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                  
+                  {showEmployeeForm ? (
+                    <form onSubmit={handleSaveEmployee} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{editingEmployeeId ? 'Редактировать сотрудника' : 'Добавить сотрудника'}</h3>
+                      {employeeFormError && <div className="field-error" style={{ background: 'var(--warning-bg)', padding: '0.5rem', borderRadius: '4px' }}>{employeeFormError}</div>}
+                      
+                      <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', display: 'grid' }}>
+                        <div>
+                          <label>Логин *</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={employeeFormData.username}
+                            onChange={(e) => setEmployeeFormData({ ...employeeFormData, username: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Пароль {editingEmployeeId ? '(оставьте пустым для сохранения старого)' : '*'}</label>
+                          <input 
+                            type="password" 
+                            className="input-field" 
+                            value={employeeFormData.password}
+                            onChange={(e) => setEmployeeFormData({ ...employeeFormData, password: e.target.value })}
+                            placeholder={editingEmployeeId ? 'Новый пароль...' : 'Пароль...'}
+                            required={!editingEmployeeId}
+                          />
+                        </div>
+                        <div>
+                          <label>ФИО оператора *</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={employeeFormData.full_name}
+                            onChange={(e) => setEmployeeFormData({ ...employeeFormData, full_name: e.target.value })}
+                            placeholder="Например: Гончарова О."
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label>Роль *</label>
+                          <select 
+                            className="select-field"
+                            value={employeeFormData.role}
+                            onChange={(e) => setEmployeeFormData({ ...employeeFormData, role: e.target.value })}
+                          >
+                            <option value="employee">Сотрудник</option>
+                            <option value="admin">Администратор</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label>Email для отбивок</label>
+                          <input 
+                            type="email" 
+                            className="input-field" 
+                            value={employeeFormData.email}
+                            onChange={(e) => setEmployeeFormData({ ...employeeFormData, email: e.target.value })}
+                            placeholder="operator@corporate.ru"
+                          />
+                        </div>
+                        <div>
+                          <label>Username в Rocket Chat</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            value={employeeFormData.rocketchat_username}
+                            onChange={(e) => setEmployeeFormData({ ...employeeFormData, rocketchat_username: e.target.value })}
+                            placeholder="Например: @username"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                        <button type="button" className="btn btn-secondary" onClick={() => setShowEmployeeForm(false)}>Отмена</button>
+                        <button type="submit" className="btn btn-primary">Сохранить</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Список всех сотрудников с доступом к системе.</p>
+                        <button type="button" className="btn btn-primary" onClick={handleOpenAddEmployee}>
+                          + Добавить сотрудника
+                        </button>
+                      </div>
+                      
+                      <table className="refunds-table" style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem' }}>
+                        <thead>
+                          <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>
+                            <th style={{ padding: '0.75rem' }}>Логин</th>
+                            <th style={{ padding: '0.75rem' }}>ФИО</th>
+                            <th style={{ padding: '0.75rem' }}>Роль</th>
+                            <th style={{ padding: '0.75rem' }}>Email</th>
+                            <th style={{ padding: '0.75rem' }}>Rocket Chat</th>
+                            <th style={{ padding: '0.75rem' }}>Действия</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employees.length === 0 ? (
+                            <tr>
+                              <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Сотрудники не найдены.</td>
+                            </tr>
+                          ) : (
+                            employees.map(emp => (
+                              <tr key={emp.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '0.75rem' }}><strong style={{ color: 'var(--accent-color)' }}>{emp.username}</strong></td>
+                                <td style={{ padding: '0.75rem' }}>{emp.full_name}</td>
+                                <td style={{ padding: '0.75rem' }}>
+                                  <span style={{ 
+                                    padding: '0.2rem 0.4rem', 
+                                    borderRadius: '4px', 
+                                    fontSize: '0.75rem', 
+                                    fontWeight: 'bold',
+                                    background: emp.role === 'admin' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                    color: emp.role === 'admin' ? '#f87171' : '#34d399',
+                                    border: emp.role === 'admin' ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)'
+                                  }}>
+                                    {emp.role === 'admin' ? 'Админ' : 'Сотрудник'}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.75rem' }}>{emp.email || '—'}</td>
+                                <td style={{ padding: '0.75rem' }}>{emp.rocketchat_username || '—'}</td>
+                                <td style={{ padding: '0.75rem' }}>
+                                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button 
+                                      type="button"
+                                      className="btn-icon edit-action"
+                                      title="Редактировать сотрудника"
+                                      onClick={() => handleOpenEditEmployee(emp)}
+                                      style={{ color: '#fbbf24' }}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                                      </svg>
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      className="btn-icon delete-action"
+                                      title="Удалить сотрудника"
+                                      onClick={() => handleDeleteEmployee(emp.id, emp.full_name)}
+                                      style={{ color: '#ef4444' }}
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="3 6 5 6 21 6"/>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowSettingsModal(false)}>Закрыть</button>
                 </div>
               </div>
             )}

@@ -7,6 +7,8 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { db, initDb } = require('./database');
 const { notifyStatusChange, syncToGoogleSheets } = require('./notifications');
 const { getSettings, saveSettings } = require('./settings_manager');
+const bcrypt = require('bcryptjs');
+const { generateToken, authenticateToken, requireAdmin } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -28,8 +30,175 @@ async function getValidatorsFromDb() {
   return data;
 }
 
+// --- Authentication & User Management Endpoints ---
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: "Логин и пароль обязательны." });
+  }
+
+  try {
+    const { data: user, error } = await db
+      .from('users')
+      .select('*')
+      .eq('username', username.toLowerCase().trim())
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ error: "Неверный логин или пароль." });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Неверный логин или пароль." });
+    }
+
+    const token = generateToken(user);
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        email: user.email,
+        rocketchat_username: user.rocketchat_username,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  res.json({ user: req.user });
+});
+
+// GET /api/users (Admin only)
+app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { data: users, error } = await db
+      .from('users')
+      .select('id, username, full_name, email, rocketchat_username, role, created_at')
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+    res.json(users || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/users (Admin only)
+app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
+  const { username, password, full_name, email, rocketchat_username, role } = req.body;
+
+  if (!username || !password || !full_name || !role) {
+    return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const { data: newUser, error } = await db
+      .from('users')
+      .insert([
+        {
+          username: username.toLowerCase().trim(),
+          password_hash,
+          full_name,
+          email: email || null,
+          rocketchat_username: rocketchat_username || null,
+          role
+        }
+      ])
+      .select('id, username, full_name, email, rocketchat_username, role')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "Пользователь с таким логином уже существует." });
+      }
+      throw error;
+    }
+
+    res.status(201).json(newUser);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/users/:id (Admin only)
+app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { username, password, full_name, email, rocketchat_username, role } = req.body;
+
+  if (!username || !full_name || !role) {
+    return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
+  }
+
+  try {
+    const updateData = {
+      username: username.toLowerCase().trim(),
+      full_name,
+      email: email || null,
+      rocketchat_username: rocketchat_username || null,
+      role,
+      updated_at: new Date().toISOString()
+    };
+
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password_hash = await bcrypt.hash(password, salt);
+    }
+
+    const { data: updatedUser, error } = await db
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select('id, username, full_name, email, rocketchat_username, role')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "Пользователь с таким логином уже существует." });
+      }
+      throw error;
+    }
+
+    res.json(updatedUser);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/users/:id (Admin only)
+app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ error: "Вы не можете удалить свою собственную учетную запись." });
+    }
+
+    const { error } = await db
+      .from('users')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ success: true, message: "Пользователь успешно удален." });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 1. GET /api/refunds - Filtered list of refunds with server-side pagination, search, and warning check
-app.get('/api/refunds', async (req, res) => {
+app.get('/api/refunds', authenticateToken, async (req, res) => {
   const page = parseInt(req.query.page || '1');
   const limit = parseInt(req.query.limit || '10');
   const offset = (page - 1) * limit;
@@ -99,7 +268,7 @@ app.get('/api/refunds', async (req, res) => {
 });
 
 // 2. GET /api/refunds/stats - Dashboard metrics (grouped by currency for authorized sum)
-app.get('/api/refunds/stats', async (req, res) => {
+app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
   try {
     // Count total pending
     const { count: totalPending, error: pendingErr } = await db
@@ -158,7 +327,7 @@ app.get('/api/refunds/stats', async (req, res) => {
 });
 
 // 3. POST /api/refunds - Create new application
-app.post('/api/refunds', async (req, res) => {
+app.post('/api/refunds', authenticateToken, async (req, res) => {
   const {
     ticket_number,
     bsp_request_number,
@@ -178,11 +347,21 @@ app.post('/api/refunds', async (req, res) => {
     support_ticket
   } = req.body;
 
+  let final_requested_by = requested_by;
+  let final_operator_email = operator_email;
+  let final_operator_rocketchat = operator_rocketchat;
+
+  if (req.user.role === 'employee') {
+    final_requested_by = req.user.full_name;
+    final_operator_email = req.user.email;
+    final_operator_rocketchat = req.user.rocketchat_username;
+  }
+
   // Basic Validation
   if (!ticket_number || ticket_number.length !== 13 || isNaN(ticket_number)) {
     return res.status(400).json({ error: "Номер билета должен состоять ровно из 13 цифр." });
   }
-  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !requested_by || !operator_rocketchat || !support_ticket) {
+  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !final_requested_by || !final_operator_rocketchat || !support_ticket) {
     return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
   }
 
@@ -203,9 +382,9 @@ app.post('/api/refunds', async (req, res) => {
           currency: currency || 'EUR',
           agent_refund_equivalent: agent_refund_equivalent ? parseFloat(agent_refund_equivalent) : null,
           agent_name,
-          requested_by,
-          operator_email: operator_email || null,
-          operator_rocketchat: operator_rocketchat || null,
+          requested_by: final_requested_by,
+          operator_email: final_operator_email || null,
+          operator_rocketchat: final_operator_rocketchat || null,
           status,
           status_updated_at: request_date,
           refund_type,
@@ -233,7 +412,7 @@ app.post('/api/refunds', async (req, res) => {
           application_id: newId,
           old_status: null,
           new_status: status,
-          changed_by: requested_by,
+          changed_by: final_requested_by,
           comment: historyComment
         }
       ]);
@@ -243,7 +422,7 @@ app.post('/api/refunds', async (req, res) => {
     // Sync newly created ticket to Google Sheets (with action metadata)
     syncToGoogleSheets({
       action: 'create',
-      changed_by: requested_by,
+      changed_by: final_requested_by,
       comment: comment || 'Создание новой заявки',
       old_status: null,
       ticket: newTicket
@@ -256,10 +435,10 @@ app.post('/api/refunds', async (req, res) => {
 });
 
 // 4. PUT /api/refunds/:id/status - Update refund status with optional comment & authorized_amount
-app.put('/api/refunds/:id/status', async (req, res) => {
+app.put('/api/refunds/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { new_status, comment, changed_by, authorized_amount } = req.body;
-  const operatorName = changed_by || 'СОФИ';
+  const { new_status, comment, authorized_amount } = req.body;
+  const operatorName = req.user.full_name || 'СОФИ';
 
   if (!new_status) {
     return res.status(400).json({ error: "Укажите новый статус." });
@@ -364,7 +543,7 @@ app.put('/api/refunds/:id/status', async (req, res) => {
 });
 
 // 4b. PUT /api/refunds/:id - Update refund details (Edit)
-app.put('/api/refunds/:id', async (req, res) => {
+app.put('/api/refunds/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const {
     ticket_number,
@@ -385,22 +564,38 @@ app.put('/api/refunds/:id', async (req, res) => {
     support_ticket
   } = req.body;
 
-  if (!ticket_number || ticket_number.length !== 13 || isNaN(ticket_number)) {
-    return res.status(400).json({ error: "Номер билета должен состоять ровно из 13 цифр." });
-  }
-  if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !requested_by || !operator_rocketchat || !support_ticket) {
-    return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
-  }
-
   try {
-    // Fetch old ticket details to get previous status
+    // Fetch old ticket details
     const { data: oldTicket, error: getOldErr } = await db
       .from('refund_applications')
-      .select('status')
+      .select('*')
       .eq('id', id)
       .single();
     
-    const oldStatus = oldTicket ? oldTicket.status : null;
+    if (getOldErr || !oldTicket) {
+      return res.status(404).json({ error: "Заявка не найдена." });
+    }
+
+    const oldStatus = oldTicket.status;
+
+    let final_requested_by = requested_by;
+    let final_operator_email = operator_email;
+    let final_operator_rocketchat = operator_rocketchat;
+
+    if (req.user.role === 'employee') {
+      // Prevent modification of operator contact fields
+      final_requested_by = oldTicket.requested_by;
+      final_operator_email = oldTicket.operator_email;
+      final_operator_rocketchat = oldTicket.operator_rocketchat;
+    }
+
+    // Basic Validation
+    if (!ticket_number || ticket_number.length !== 13 || isNaN(ticket_number)) {
+      return res.status(400).json({ error: "Номер билета должен состоять ровно из 13 цифр." });
+    }
+    if (!system_type || !validator || !request_date || !amount_eur || !agent_name || !final_requested_by || !final_operator_rocketchat || !support_ticket) {
+      return res.status(400).json({ error: "Пожалуйста, заполните все обязательные поля." });
+    }
 
     // Update DB
     const { error: updateErr } = await db
@@ -416,9 +611,9 @@ app.put('/api/refunds/:id', async (req, res) => {
         currency,
         agent_refund_equivalent: agent_refund_equivalent ? parseFloat(agent_refund_equivalent) : null,
         agent_name,
-        requested_by,
-        operator_email: operator_email || null,
-        operator_rocketchat: operator_rocketchat || null,
+        requested_by: final_requested_by,
+        operator_email: final_operator_email || null,
+        operator_rocketchat: final_operator_rocketchat || null,
         refund_type,
         support_ticket,
         updated_at: new Date().toISOString()
@@ -442,7 +637,7 @@ app.put('/api/refunds/:id', async (req, res) => {
           application_id: id,
           old_status: 'Изменен',
           new_status: 'Изменен',
-          changed_by: requested_by,
+          changed_by: req.user.full_name || final_requested_by,
           comment: commentText
         }
       ]);
@@ -459,7 +654,7 @@ app.put('/api/refunds/:id', async (req, res) => {
     if (!getErr && updatedTicket) {
       syncToGoogleSheets({
         action: 'edit',
-        changed_by: requested_by,
+        changed_by: req.user.full_name || final_requested_by,
         comment: comment || 'Редактирование параметров заявки',
         old_status: oldStatus,
         ticket: updatedTicket
@@ -473,7 +668,7 @@ app.put('/api/refunds/:id', async (req, res) => {
 });
 
 // 4c. DELETE /api/refunds/:id - Delete refund application
-app.delete('/api/refunds/:id', async (req, res) => {
+app.delete('/api/refunds/:id', authenticateToken, requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     const { error } = await db
@@ -489,7 +684,7 @@ app.delete('/api/refunds/:id', async (req, res) => {
 });
 
 // 5. GET /api/refunds/:id/history - Get status audit trail
-app.get('/api/refunds/:id/history', async (req, res) => {
+app.get('/api/refunds/:id/history', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
     const { data, error } = await db
@@ -506,7 +701,7 @@ app.get('/api/refunds/:id/history', async (req, res) => {
 });
 
 // 6. GET /api/notifications - Get in-app notifications
-app.get('/api/notifications', async (req, res) => {
+app.get('/api/notifications', authenticateToken, async (req, res) => {
   const recipient = req.query.recipient || ''; 
   
   try {
@@ -527,7 +722,7 @@ app.get('/api/notifications', async (req, res) => {
 });
 
 // 7. PUT /api/notifications/read - Mark notifications as read
-app.put('/api/notifications/read', async (req, res) => {
+app.put('/api/notifications/read', authenticateToken, async (req, res) => {
   const { ids, recipient } = req.body;
 
   try {
@@ -550,7 +745,7 @@ app.put('/api/notifications/read', async (req, res) => {
 });
 
 // 8. GET /api/settings - Get settings (with masked passwords)
-app.get('/api/settings', async (req, res) => {
+app.get('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
   const settings = await getSettings();
   const masked = { ...settings };
   if (masked.smtp_pass) masked.smtp_pass = '••••••••';
@@ -559,7 +754,7 @@ app.get('/api/settings', async (req, res) => {
 });
 
 // 9. PUT /api/settings - Update settings
-app.put('/api/settings', async (req, res) => {
+app.put('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
   const success = await saveSettings(req.body);
   if (success) {
     res.json({ success: true, message: "Настройки успешно сохранены." });
@@ -569,7 +764,7 @@ app.put('/api/settings', async (req, res) => {
 });
 
 // 10. POST /api/settings/test - Test connection using current form configuration
-app.post('/api/settings/test', async (req, res) => {
+app.post('/api/settings/test', authenticateToken, requireAdmin, async (req, res) => {
   const currentSettings = await getSettings();
   const testSettings = { ...req.body };
   
@@ -632,7 +827,7 @@ app.post('/api/settings/test', async (req, res) => {
 });
 
 // Dynamic Validators API endpoints
-app.get('/api/validators', async (req, res) => {
+app.get('/api/validators', authenticateToken, async (req, res) => {
   try {
     const list = await getValidatorsFromDb();
     res.json(list);
@@ -641,7 +836,7 @@ app.get('/api/validators', async (req, res) => {
   }
 });
 
-app.post('/api/validators', async (req, res) => {
+app.post('/api/validators', authenticateToken, requireAdmin, async (req, res) => {
   const { code, system_type } = req.body;
   if (!code || !code.trim()) {
     return res.status(400).json({ error: "Код валидатора пуст." });
@@ -666,7 +861,7 @@ app.post('/api/validators', async (req, res) => {
   }
 });
 
-app.delete('/api/validators/:code', async (req, res) => {
+app.delete('/api/validators/:code', authenticateToken, requireAdmin, async (req, res) => {
   const { code } = req.params;
   const cleanCode = code.trim().toUpperCase();
 
