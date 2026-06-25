@@ -323,7 +323,7 @@ async function run() {
           else colStatusDate = idx;
         }
         // Amount check
-        else if (h.includes('сумма') || h.includes('amount') || h.includes('price')) {
+        else if ((h.includes('сумма') || h.includes('amount') || h.includes('price')) && !h.includes('эквивалент') && !h.includes('equivalent')) {
           colAmount = idx;
         }
         // Agent check
@@ -466,8 +466,27 @@ async function run() {
   // De-duplicate applications by ticket_number to avoid duplicate key issues within the same batch/run
   const uniqueAppsMap = new Map();
   for (const app of rawApplications) {
-    if (!uniqueAppsMap.has(app.ticket_number)) {
+    const existing = uniqueAppsMap.get(app.ticket_number);
+    if (!existing) {
       uniqueAppsMap.set(app.ticket_number, app);
+    } else {
+      // Overwrite if new one is later in date, or has higher status priority
+      const dateA = new Date(existing.request_date).getTime();
+      const dateB = new Date(app.request_date).getTime();
+      
+      const statusPriority = {
+        'Авторизовано': 5,
+        'Отклонено': 4,
+        'авторизовано с расхождением': 3,
+        'На проверке': 2,
+        'Создан': 1
+      };
+      const pExisting = statusPriority[existing.status] || 0;
+      const pNew = statusPriority[app.status] || 0;
+      
+      if (dateB > dateA || (dateB === dateA && pNew >= pExisting)) {
+        uniqueAppsMap.set(app.ticket_number, app);
+      }
     }
   }
   const deDuplicatedApplications = Array.from(uniqueAppsMap.values());
