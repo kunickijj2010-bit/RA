@@ -138,6 +138,7 @@ export default function App() {
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   const limit = 10;
 
   // Modals visibility
@@ -346,6 +347,7 @@ export default function App() {
       if (res.ok) {
         setRefunds(data.data);
         setTotalPages(data.pagination.totalPages);
+        setTotalRecords(data.pagination.totalRecords);
       }
     } catch (err) {
       console.error("Error fetching refunds:", err);
@@ -1237,7 +1239,26 @@ export default function App() {
       {/* REFUNDS DATA GRID */}
       <section className="data-section">
         <div className="table-header-row">
-          <h2>Список заявок на возврат</h2>
+          <h2>
+            Список заявок на возврат
+            {(search || statusFilter || systemFilter || validatorFilter || dateStart || dateEnd || onlyWarningsFilter || onlyPendingFilter || onlyMineFilter) && (
+              <span className="filter-count-badge" style={{
+                fontSize: '0.9rem',
+                color: 'var(--accent-color)',
+                fontWeight: '600',
+                marginLeft: '0.75rem',
+                background: 'rgba(99, 102, 241, 0.15)',
+                padding: '0.2rem 0.65rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                verticalAlign: 'middle',
+                display: 'inline-block',
+                whiteSpace: 'nowrap'
+              }}>
+                Найдено: {totalRecords}
+              </span>
+            )}
+          </h2>
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19" />

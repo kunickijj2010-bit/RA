@@ -362,6 +362,25 @@ async function run() {
       if (tab.tabName.toLowerCase().includes('turkish') || tab.tabName.toLowerCase().includes('tl')) defaultCurrency = 'TRY';
       else if (tab.tabName.toLowerCase().includes('казахстан') || tab.tabName.toLowerCase().includes('kzt')) defaultCurrency = 'KZT';
       else if (tab.tabName.toLowerCase().includes('дубай') || tab.tabName.toLowerCase().includes('aed')) defaultCurrency = 'AED';
+      else if (tab.tabName.toLowerCase().includes('екб')) defaultCurrency = 'RUB';
+
+      // Check if amount column header specifies currency and override if so
+      if (colAmount !== -1 && header[colAmount]) {
+        const amountHeader = header[colAmount].toLowerCase();
+        if (amountHeader.includes('руб') || amountHeader.includes('rub')) {
+          defaultCurrency = 'RUB';
+        } else if (amountHeader.includes('eur') || amountHeader.includes('евро')) {
+          defaultCurrency = 'EUR';
+        } else if (amountHeader.includes('usd') || amountHeader.includes('долл')) {
+          defaultCurrency = 'USD';
+        } else if (amountHeader.includes('kzt') || amountHeader.includes('тнг') || amountHeader.includes('тенге')) {
+          defaultCurrency = 'KZT';
+        } else if (amountHeader.includes('try') || amountHeader.includes('tl') || amountHeader.includes('лир')) {
+          defaultCurrency = 'TRY';
+        } else if (amountHeader.includes('aed') || amountHeader.includes('дирх')) {
+          defaultCurrency = 'AED';
+        }
+      }
 
       let parsedCount = 0;
       for (let rIdx = 1; rIdx < rows.length; rIdx++) {
