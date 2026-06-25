@@ -206,19 +206,45 @@ async function run() {
   // 3. For each sheet tab, find if it matches an active validator
   const activeTabs = [];
   for (const m of mappings) {
-    // Extract digits from tab name
-    const digitsMatch = m.name.match(/\d+/);
+    // Clean both names for comparison
+    const cleanTab = m.name.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
     let matchedValidator = null;
 
-    if (digitsMatch) {
-      const codeNum = digitsMatch[0];
-      matchedValidator = dbValidators.find(v => v.code.includes(codeNum));
-    } else {
-      // Fuzzy string match
-      const cleanTabName = m.name.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
+    // First, try exact clean match
+    matchedValidator = dbValidators.find(v => {
+      const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
+      return cleanCode === cleanTab;
+    });
+
+    // Second, if no exact match, try matching by clean normalized values (resolving Cyrillic/Latin homoglyphs)
+    if (!matchedValidator) {
+      const cyrToLat = {
+        'м': 'm', 'в': 'b', 'а': 'a', 'о': 'o', 'к': 'k', 'с': 'c', 'х': 'kh', 'е': 'e', 'т': 't'
+      };
+      const normalize = (s) => s.split('').map(c => cyrToLat[c] || c).join('');
+      const normTab = normalize(cleanTab);
+      
       matchedValidator = dbValidators.find(v => {
-        const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '');
-        return cleanCode.includes(cleanTabName) || cleanTabName.includes(cleanCode);
+        const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
+        return normalize(cleanCode) === normTab;
+      });
+    }
+
+    // Third, fall back to digits-only match if tab name has digits
+    const digitsMatch = m.name.match(/\d+/);
+    if (!matchedValidator && digitsMatch) {
+      const codeNum = digitsMatch[0];
+      matchedValidator = dbValidators.find(v => {
+        const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
+        return cleanCode === codeNum || cleanCode.replace(/\D/g, '') === codeNum;
+      });
+    }
+
+    // Fourth, fuzzy substring match
+    if (!matchedValidator) {
+      matchedValidator = dbValidators.find(v => {
+        const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
+        return cleanCode.includes(cleanTab) || cleanTab.includes(cleanCode);
       });
     }
 
