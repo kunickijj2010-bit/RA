@@ -435,7 +435,7 @@ app.post('/api/refunds', authenticateToken, async (req, res) => {
 
     if (error) {
       if (error.code === '23505') {
-        return res.status(400).json({ error: "Заявка с таким номером билета уже существует." });
+        return res.status(400).json({ error: "Заявка с таким номером билета и номером RA уже существует." });
       }
       throw error;
     }
@@ -661,7 +661,7 @@ app.put('/api/refunds/:id', authenticateToken, async (req, res) => {
 
     if (updateErr) {
       if (updateErr.code === '23505') {
-        return res.status(400).json({ error: "Заявка с таким номером билета уже существует." });
+        return res.status(400).json({ error: "Заявка с таким номером билета и номером RA уже существует." });
       }
       throw updateErr;
     }

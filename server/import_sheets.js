@@ -516,12 +516,13 @@ async function run() {
     if (operatorsToInsert.length > 5) console.log(`  ... and ${operatorsToInsert.length - 5} more.`);
   }
 
-  // De-duplicate applications by ticket_number to avoid duplicate key issues within the same batch/run
+  // De-duplicate applications by composite key to avoid duplicate key issues within the same batch/run
   const uniqueAppsMap = new Map();
   for (const app of rawApplications) {
-    const existing = uniqueAppsMap.get(app.ticket_number);
+    const key = `${app.ticket_number}_${app.bsp_request_number || ''}_${app.tch_request_number || ''}`;
+    const existing = uniqueAppsMap.get(key);
     if (!existing) {
-      uniqueAppsMap.set(app.ticket_number, app);
+      uniqueAppsMap.set(key, app);
     } else {
       // Overwrite if new one is later in date, or has higher status priority
       const dateA = new Date(existing.request_date).getTime();
@@ -538,7 +539,7 @@ async function run() {
       const pNew = statusPriority[app.status] || 0;
       
       if (dateB > dateA || (dateB === dateA && pNew >= pExisting)) {
-        uniqueAppsMap.set(app.ticket_number, app);
+        uniqueAppsMap.set(key, app);
       }
     }
   }
@@ -583,7 +584,7 @@ async function run() {
       const batchTickets = batch.map(a => a.ticket_number);
       const { data: existingApps, error: chkErr } = await db
         .from('refund_applications')
-        .select('ticket_number')
+        .select('ticket_number, bsp_request_number, tch_request_number')
         .in('ticket_number', batchTickets);
 
       if (chkErr) {
@@ -591,8 +592,12 @@ async function run() {
         continue;
       }
 
-      const existingSet = new Set(existingApps.map(a => a.ticket_number));
-      const filteredBatch = batch.filter(a => !existingSet.has(a.ticket_number));
+      const existingSet = new Set(existingApps.map(a => 
+        `${a.ticket_number}_${a.bsp_request_number || ''}_${a.tch_request_number || ''}`
+      ));
+      const filteredBatch = batch.filter(a => 
+        !existingSet.has(`${a.ticket_number}_${a.bsp_request_number || ''}_${a.tch_request_number || ''}`)
+      );
       
       skippedCount += (batch.length - filteredBatch.length);
 
@@ -603,7 +608,7 @@ async function run() {
         const { data: insertedApps, error: insertAppsErr } = await db
           .from('refund_applications')
           .insert(insertPayload)
-          .select('id, ticket_number, status, requested_by');
+          .select('id, ticket_number, status, requested_by, bsp_request_number, tch_request_number');
 
         if (insertAppsErr) {
           console.error(`❌ Batch insert failed [${i} to ${i + batch.length}]:`, insertAppsErr.message);
@@ -614,7 +619,11 @@ async function run() {
           if (insertedApps && insertedApps.length > 0) {
             const historyBatch = [];
             for (const app of insertedApps) {
-              const original = filteredBatch.find(a => a.ticket_number === app.ticket_number);
+              const original = filteredBatch.find(a => 
+                a.ticket_number === app.ticket_number &&
+                (a.bsp_request_number || '') === (app.bsp_request_number || '') &&
+                (a.tch_request_number || '') === (app.tch_request_number || '')
+              );
               const commentText = original && original.comment ? original.comment : 'Импорт из Google Sheets';
               historyBatch.push({
                 application_id: app.id,
