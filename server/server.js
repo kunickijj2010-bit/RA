@@ -302,11 +302,31 @@ app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
 
     // Sum of authorized refund amounts grouped by currency
     // For 'авторизовано с расхождением' we use the authorized_amount, otherwise the main amount
-    const { data: authData, error: authErr } = await db
-      .from('refund_applications')
-      .select('currency, status, amount, authorized_amount')
-      .in('status', ['Авторизовано', 'авторизовано с расхождением']);
-    if (authErr) throw authErr;
+    // Fetch in pages of 1000 to circumvent PostgREST max_rows limit
+    let authData = [];
+    let from = 0;
+    let to = 999;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: batchData, error: authErr } = await db
+        .from('refund_applications')
+        .select('currency, status, amount, authorized_amount')
+        .in('status', ['Авторизовано', 'авторизовано с расхождением'])
+        .range(from, to);
+
+      if (authErr) throw authErr;
+      if (!batchData || batchData.length === 0) {
+        hasMore = false;
+      } else {
+        authData = authData.concat(batchData);
+        if (batchData.length < 1000) {
+          hasMore = false;
+        } else {
+          from += 1000;
+          to += 1000;
+        }
+      }
+    }
 
     const sumsByCurrency = {};
     if (authData) {
