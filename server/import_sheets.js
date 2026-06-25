@@ -330,9 +330,12 @@ async function run() {
         else if ((h.includes('агент') || h.includes('agent')) && !h.includes('эквивалент') && !h.includes('equivalent')) {
           colAgent = idx;
         }
-        // Operator check
-        else if (h.includes('запросил') || h.includes('оператор') || h.includes('сотрудник') || h.includes('кем') || h.includes('кто') || h === 'user') {
+        // Operator and Modifier check
+        else if ((h.includes('запросил') || h.includes('оператор') || h.includes('сотрудник') || h.includes('кем') || h.includes('кто') || h === 'user') && !h.includes('внес') && !h.includes('внесла')) {
           colOperator = idx;
+        }
+        else if (h.includes('внес') || h.includes('внесла') || h.includes('изменил')) {
+          colModifier = idx;
         }
         // Status check
         else if (h.includes('авторизац') || h.includes('статус') || h.includes('status') || h.includes('решение')) {
