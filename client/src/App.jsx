@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
-const CURRENCIES = ['EUR', 'USD', 'RUB', 'TRY', 'KGS', 'KZT'];
+const CURRENCIES = ['EUR', 'USD', 'RUB', 'TRY', 'KGS', 'KZT', 'AED'];
 const AGENTS = [
   "Emerging Travel Inc. (0CK9)",
   "Alfa Travel LLC (1AB2)",

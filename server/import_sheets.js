@@ -384,7 +384,7 @@ async function run() {
       console.log(`  Mapping: ticket=${colTicket}, otrs=${colOtrs}, ra=${colRa}, date=${colDate}, amount=${colAmount}, agent=${colAgent}, operator=${colOperator}, status=${colStatus}, equiv=${colEquivalent}, comment=${colComment}`);
 
       // Determine default currency for the tab
-      let defaultCurrency = 'EUR';
+      let defaultCurrency = 'RUB';
       if (tab.tabName.toLowerCase().includes('turkish') || tab.tabName.toLowerCase().includes('tl')) defaultCurrency = 'TRY';
       else if (tab.tabName.toLowerCase().includes('казахстан') || tab.tabName.toLowerCase().includes('kzt')) defaultCurrency = 'KZT';
       else if (tab.tabName.toLowerCase().includes('дубай') || tab.tabName.toLowerCase().includes('aed')) defaultCurrency = 'AED';
