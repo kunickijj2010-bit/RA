@@ -58,6 +58,10 @@ function mapStatus(statusStr) {
     return 'Авторизовано';
   } else if (s.includes('отклон') || s.includes('отказ')) {
     return 'Отклонено';
+  } else if (s.includes('выполнен в гдс') || s.includes('выполнен в gds')) {
+    return 'Выполнен в ГДС';
+  } else if (s.includes('отозван')) {
+    return 'Отозвано';
   } else if (s.includes('провер') || s.includes('на проверке')) {
     return 'На проверке';
   } else if (s.includes('создан')) {
@@ -544,6 +548,8 @@ async function run() {
       
       const statusPriority = {
         'Авторизовано': 5,
+        'Выполнен в ГДС': 5,
+        'Отозвано': 5,
         'Отклонено': 4,
         'авторизовано с расхождением': 3,
         'На проверке': 2,

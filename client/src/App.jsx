@@ -10,7 +10,7 @@ const AGENTS = [
   "Siberia Agency (9ZZ1)",
   "Aeroflot Agent (2CD3)"
 ];
-const STATUSES = ["Создан", "На проверке", "Авторизовано", "авторизовано с расхождением", "Отклонено"];
+const STATUSES = ["Создан", "На проверке", "Авторизовано", "авторизовано с расхождением", "Отклонено", "Выполнен в ГДС", "Отозвано"];
 
 // Custom styled Combobox for Validator selection
 function ValidatorInput({ value, onChange, options }) {
@@ -972,12 +972,14 @@ export default function App() {
       case 'Авторизовано': return 'badge-status-authorized';
       case 'авторизовано с расхождением': return 'badge-status-discrepancy';
       case 'Отклонено': return 'badge-status-rejected';
+      case 'Выполнен в ГДС': return 'badge-status-gds';
+      case 'Отозвано': return 'badge-status-recalled';
       default: return '';
     }
   };
 
   const isTicketWarning = (refund) => {
-    if (refund.status === 'Авторизовано' || refund.status === 'Отклонено' || refund.status === 'авторизовано с расхождением') return false;
+    if (refund.status !== 'Создан' && refund.status !== 'На проверке') return false;
     const updated = new Date(refund.request_date);
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);

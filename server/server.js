@@ -253,7 +253,7 @@ app.get('/api/refunds', authenticateToken, async (req, res) => {
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const dateStr = ninetyDaysAgo.toISOString().split('T')[0];
       query = query
-        .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
+        .in('status', ['Создан', 'На проверке'])
         .lte('request_date', dateStr);
     }
 
@@ -306,7 +306,7 @@ app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
     let queryWarn = db
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
-      .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
+      .in('status', ['Создан', 'На проверке'])
       .lte('request_date', dateStr)
       .eq('is_archived', false);
     queryWarn = applyFilters(queryWarn, req);
