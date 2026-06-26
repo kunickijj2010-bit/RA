@@ -1383,7 +1383,32 @@ export default function App() {
                         )}
                       </td>
                       <td>
-                        <span className="badge badge-system">{refund.system_type} ({refund.validator})</span>
+                        <span 
+                          className="badge badge-system" 
+                          style={{ cursor: 'pointer' }}
+                          title="Кликните для фильтрации по подключению"
+                          onClick={() => { setSystemFilter(refund.system_type); setPage(1); }}
+                        >
+                          {refund.system_type}
+                        </span>
+                        <span 
+                          className="badge badge-validator" 
+                          style={{ 
+                            cursor: 'pointer', 
+                            marginLeft: '4px',
+                            background: 'rgba(99, 102, 241, 0.12)',
+                            border: '1px solid rgba(99, 102, 241, 0.25)',
+                            color: '#a5b4fc',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: '500'
+                          }}
+                          title={`Кликните для фильтрации по валидатору ${refund.validator}`}
+                          onClick={() => { setValidatorFilter(refund.validator); setPage(1); }}
+                        >
+                          {refund.validator}
+                        </span>
                         {refund.refund_type && (
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                             {refund.refund_type}
@@ -1417,12 +1442,20 @@ export default function App() {
                           ? `${refund.agent_refund_equivalent.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} руб.`
                           : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
-                      <td>
-                        <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={refund.agent_name}>
+                      <td 
+                        style={{ cursor: 'pointer' }} 
+                        title="Кликните для поиска по этому агенту" 
+                        onClick={() => { setSearch(refund.agent_name); setPage(1); }}
+                      >
+                        <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {refund.agent_name}
                         </div>
                       </td>
-                      <td>
+                      <td 
+                        style={{ cursor: 'pointer' }} 
+                        title="Кликните для поиска по этому создателю" 
+                        onClick={() => { setSearch(refund.requested_by); setPage(1); }}
+                      >
                         <div style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>{refund.requested_by}</span>
                           {user && refund.requested_by === user.full_name && (
@@ -1450,7 +1483,11 @@ export default function App() {
                           </div>
                         )}
                       </td>
-                      <td>
+                      <td 
+                        style={{ cursor: 'pointer' }} 
+                        title="Кликните для фильтрации по статусу" 
+                        onClick={() => { setStatusFilter(refund.status); setPage(1); }}
+                      >
                         <span className={`badge badge-status ${getStatusBadgeClass(refund.status)}`}>
                           {refund.status}
                         </span>
@@ -1527,15 +1564,49 @@ export default function App() {
               >
                 Назад
               </button>
-              {Array.from({ length: totalPages }).map((_, idx) => (
-                <span 
-                  key={idx} 
-                  className={`page-num ${page === idx + 1 ? 'active' : ''}`}
-                  onClick={() => setPage(idx + 1)}
-                >
-                  {idx + 1}
-                </span>
-              ))}
+              {(() => {
+                const pages = [];
+                // Always show page 1
+                pages.push(1);
+                
+                const startRange = Math.max(2, page - 2);
+                const endRange = Math.min(totalPages - 1, page + 2);
+                
+                if (startRange > 2) {
+                  pages.push('...');
+                }
+                
+                for (let i = startRange; i <= endRange; i++) {
+                  pages.push(i);
+                }
+                
+                if (endRange < totalPages - 1) {
+                  pages.push('...');
+                }
+                
+                if (totalPages > 1) {
+                  pages.push(totalPages);
+                }
+                
+                return pages.map((p, idx) => {
+                  if (p === '...') {
+                    return (
+                      <span key={`dots-${idx}`} className="page-num dots" style={{ cursor: 'default', background: 'none', border: 'none', boxShadow: 'none' }}>
+                        ...
+                      </span>
+                    );
+                  }
+                  return (
+                    <span 
+                      key={p} 
+                      className={`page-num ${page === p ? 'active' : ''}`}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </span>
+                  );
+                });
+              })()}
               <button 
                 className="btn btn-secondary" 
                 style={{ padding: '0.4rem 0.8rem' }}

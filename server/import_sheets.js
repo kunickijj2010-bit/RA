@@ -52,21 +52,46 @@ function generateUsername(fullName) {
 function mapStatus(statusStr) {
   if (!statusStr || !statusStr.trim()) return 'Создан';
   const s = statusStr.trim().toLowerCase();
+  
   if (s.includes('расхожд') || s.includes('расхождение')) {
     return 'авторизовано с расхождением';
-  } else if (s.includes('авториз') || s === 'ок' || s === 'ok' || s.includes('проведен')) {
-    return 'Авторизовано';
-  } else if (s.includes('отклон') || s.includes('отказ')) {
+  }
+  
+  // Rejection check (takes precedence over other matches)
+  if (s.includes('отклон') || s.includes('отказ')) {
     return 'Отклонено';
-  } else if (s.includes('выполнен в гдс') || s.includes('выполнен в gds')) {
+  }
+  
+  if (s.includes('выполнен в гдс') || s.includes('выполнен в gds')) {
     return 'Выполнен в ГДС';
-  } else if (s.includes('отозван')) {
+  }
+  
+  if (s.includes('отозван') || s.includes('приостановлен')) {
     return 'Отозвано';
-  } else if (s.includes('провер') || s.includes('на проверке')) {
+  }
+  
+  if (s.includes('провер') || s.includes('на проверке')) {
     return 'На проверке';
-  } else if (s.includes('создан')) {
+  }
+  
+  // Authorization check (includes 'принято', 'принят', 'положительно', 'асм', 'проведен')
+  if (
+    s.includes('авториз') || 
+    s === 'ок' || 
+    s === 'ok' || 
+    s.includes('проведен') || 
+    s.includes('принят') || 
+    s.includes('принято') || 
+    s.includes('положительно') || 
+    s === 'асм'
+  ) {
+    return 'Авторизовано';
+  }
+  
+  if (s.includes('создан')) {
     return 'Создан';
   }
+  
   return 'Создан';
 }
 
@@ -461,11 +486,35 @@ async function run() {
         const rawAmountStr = colAmount !== -1 ? row[colAmount] : '';
         const { amount, currency } = parseAmountCurrency(rawAmountStr, defaultCurrency);
 
-        const rawStatus = colStatus !== -1 ? row[colStatus] : '';
-        const status = mapStatus(rawStatus);
-
         const rawDate = colDate !== -1 ? row[colDate] : '';
         const requestDate = parseDate(rawDate);
+
+        const rawStatus = colStatus !== -1 ? row[colStatus] : '';
+        let status = 'Создан';
+        let comment = colComment !== -1 && row[colComment] ? row[colComment].trim() : '';
+
+        // If status cell has a long note or describes future action ("будет"), move it to comments
+        const sLower = rawStatus.toLowerCase().trim();
+        const isCustomComment = sLower.includes('будет') || sLower.length > 25;
+
+        if (isCustomComment && rawStatus.trim() !== '') {
+          status = 'Создан';
+          if (comment) {
+            comment = `${comment} | [Примечание]: ${rawStatus.trim()}`;
+          } else {
+            comment = rawStatus.trim();
+          }
+        } else {
+          status = mapStatus(rawStatus);
+          
+          // Dubai/general rule: if status is empty, but statusDate is present, it's authorized
+          if ((status === 'Создан' || !rawStatus.trim()) && colStatusDate !== -1 && row[colStatusDate] && row[colStatusDate].trim() !== '') {
+            const parsedStatusDate = parseDate(row[colStatusDate]);
+            if (parsedStatusDate) {
+              status = 'Авторизовано';
+            }
+          }
+        }
 
         const rawEquiv = colEquivalent !== -1 ? row[colEquivalent] : '';
         const agentRefundEquivalent = parseEquivalent(rawEquiv);
@@ -488,7 +537,7 @@ async function run() {
           support_ticket: colOtrs !== -1 && row[colOtrs] ? row[colOtrs].trim().replace(/\D/g, '') || '0' : '0',
           bsp_request_number: tab.systemType === 'BSP Link' && colRa !== -1 && row[colRa] ? row[colRa].trim().replace(/\D/g, '') : null,
           tch_request_number: tab.systemType === 'TCH Connect' && colRa !== -1 && row[colRa] ? row[colRa].trim().replace(/\D/g, '') : null,
-          comment: colComment !== -1 && row[colComment] ? row[colComment].trim() : '',
+          comment: comment,
           is_archived: isArchived
         };
 
