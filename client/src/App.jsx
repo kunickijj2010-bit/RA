@@ -134,6 +134,8 @@ export default function App() {
   const [onlyWarningsFilter, setOnlyWarningsFilter] = useState(false);
   const [onlyPendingFilter, setOnlyPendingFilter] = useState(false);
   const [onlyMineFilter, setOnlyMineFilter] = useState(false);
+  const [archiveFilter, setArchiveFilter] = useState('active'); // 'active', 'archived', 'all'
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -247,7 +249,7 @@ export default function App() {
       fetchRefunds();
       fetchStats();
     }
-  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter]);
+  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter, archiveFilter]);
 
   useEffect(() => {
     if (token) {
@@ -340,7 +342,8 @@ export default function App() {
         date_end: dateEnd,
         only_warnings: onlyWarningsFilter ? 'true' : 'false',
         only_pending: onlyPendingFilter ? 'true' : 'false',
-        only_mine: onlyMineFilter ? 'true' : 'false'
+        only_mine: onlyMineFilter ? 'true' : 'false',
+        archive_status: archiveFilter
       });
       const res = await apiFetch(`/refunds?${query}`);
       const data = await res.json();
@@ -690,7 +693,29 @@ export default function App() {
     setOnlyWarningsFilter(false);
     setOnlyPendingFilter(false);
     setOnlyMineFilter(false);
+    setArchiveFilter('active');
     setPage(1);
+  };
+
+  const triggerSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const res = await apiFetch('/sync', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Синхронизация успешно завершена!\nОбработано записей: ${data.stats.processed}\nНовых: ${data.stats.inserted}\nОбновлено: ${data.stats.updated}\nПропущено: ${data.stats.skipped}`);
+        fetchRefunds();
+        fetchStats();
+      } else {
+        alert(`Ошибка при синхронизации: ${data.error || 'Неизвестная ошибка'}`);
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
+      alert(`Ошибка соединения при синхронизации: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Admin panel actions
@@ -1044,6 +1069,12 @@ export default function App() {
 
   return (
     <div className="app-container">
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       {/* HEADER */}
       <header className="app-header">
         <div className="logo-container">
@@ -1067,6 +1098,27 @@ export default function App() {
                 Выйти
               </button>
             </div>
+          )}
+
+          {/* Sync Button */}
+          {user && (
+            <button 
+              className="bell-button" 
+              title="Синхронизировать с Google Sheets"
+              onClick={triggerSync}
+              disabled={isSyncing}
+              style={{ position: 'relative', cursor: isSyncing ? 'not-allowed' : 'pointer' }}
+            >
+              {isSyncing ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1.5s linear infinite' }}>
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
+                </svg>
+              )}
+            </button>
           )}
 
           {/* Admin Panel Gear Button */}
@@ -1226,6 +1278,15 @@ export default function App() {
             <input type="date" className="input-field" value={dateEnd} onChange={(e) => { setDateEnd(e.target.value); setPage(1); }} />
           </div>
 
+          <div className="filter-group">
+            <label>Статус архива</label>
+            <select className="select-field" value={archiveFilter} onChange={(e) => { setArchiveFilter(e.target.value); setPage(1); }}>
+              <option value="active">Активные</option>
+              <option value="archived">Архивные</option>
+              <option value="all">Все записи</option>
+            </select>
+          </div>
+
           <div className="filter-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.6rem' }}>
             <input 
               type="checkbox" 
@@ -1250,7 +1311,7 @@ export default function App() {
         <div className="table-header-row">
           <h2>
             Список заявок на возврат
-            {(search || statusFilter || systemFilter || validatorFilter || dateStart || dateEnd || onlyWarningsFilter || onlyPendingFilter || onlyMineFilter) && (
+            {(search || statusFilter || systemFilter || validatorFilter || dateStart || dateEnd || onlyWarningsFilter || onlyPendingFilter || onlyMineFilter || archiveFilter !== 'active') && (
               <span className="filter-count-badge" style={{
                 fontSize: '0.9rem',
                 color: 'var(--accent-color)',

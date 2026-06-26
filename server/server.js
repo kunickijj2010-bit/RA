@@ -9,6 +9,7 @@ const { notifyStatusChange, syncToGoogleSheets } = require('./notifications');
 const { getSettings, saveSettings } = require('./settings_manager');
 const bcrypt = require('bcryptjs');
 const { generateToken, authenticateToken, requireAdmin } = require('./auth');
+const { run: runImport } = require('./import_sheets');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -234,9 +235,17 @@ app.get('/api/refunds', authenticateToken, async (req, res) => {
 
   const onlyWarnings = req.query.only_warnings === 'true';
   const onlyPending = req.query.only_pending === 'true';
+  const archiveStatus = req.query.archive_status || 'active'; // 'active', 'archived', 'all'
 
   try {
     let query = db.from('refund_applications').select('*', { count: 'exact' });
+
+    // Archive status filter
+    if (archiveStatus === 'active') {
+      query = query.eq('is_archived', false);
+    } else if (archiveStatus === 'archived') {
+      query = query.eq('is_archived', true);
+    }
 
     // Warning filter: status in progress and updated more than 90 days ago
     if (onlyWarnings) {
@@ -284,7 +293,8 @@ app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
     let queryPending = db
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
-      .in('status', ['Создан', 'На проверке']);
+      .in('status', ['Создан', 'На проверке'])
+      .eq('is_archived', false);
     queryPending = applyFilters(queryPending, req);
     const { count: totalPending, error: pendingErr } = await queryPending;
     if (pendingErr) throw pendingErr;
@@ -297,7 +307,8 @@ app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
       .from('refund_applications')
       .select('*', { count: 'exact', head: true })
       .not('status', 'in', '("Авторизовано","Отклонено","авторизовано с расхождением")')
-      .lte('request_date', dateStr);
+      .lte('request_date', dateStr)
+      .eq('is_archived', false);
     queryWarn = applyFilters(queryWarn, req);
     const { count: activeWarningsCount, error: warnErr } = await queryWarn;
     if (warnErr) throw warnErr;
@@ -305,7 +316,8 @@ app.get('/api/refunds/stats', authenticateToken, async (req, res) => {
     // Total tickets in system matching filters
     let queryTotal = db
       .from('refund_applications')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('is_archived', false);
     queryTotal = applyFilters(queryTotal, req);
     const { count: totalCreated, error: totalErr } = await queryTotal;
     if (totalErr) throw totalErr;
@@ -921,6 +933,34 @@ app.delete('/api/validators/:code', authenticateToken, requireAdmin, async (req,
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// POST /api/sync - Trigger manual synchronization from Google Sheets
+app.post('/api/sync', authenticateToken, async (req, res) => {
+  try {
+    console.log(`🔄 Manual sync triggered by user: ${req.user.full_name || req.user.username}`);
+    const stats = await runImport();
+    res.json({
+      success: true,
+      message: "Синхронизация успешно завершена.",
+      stats
+    });
+  } catch (err) {
+    console.error("❌ Manual sync failed:", err.message);
+    res.status(500).json({ error: "Ошибка при синхронизации: " + err.message });
+  }
+});
+
+// Auto-sync schedule: every 30 minutes in the background
+const AUTO_SYNC_INTERVAL = 30 * 60 * 1000;
+setInterval(async () => {
+  try {
+    console.log("⏰ Running background auto-sync with Google Sheets...");
+    const stats = await runImport();
+    console.log(`✅ Background sync completed: processed ${stats.processed}, imported ${stats.inserted}, updated ${stats.updated}, skipped ${stats.skipped}.`);
+  } catch (err) {
+    console.error("❌ Background auto-sync failed:", err.message);
+  }
+}, AUTO_SYNC_INTERVAL);
 
 // Catch-all route to serve the React frontend for client-side routing
 app.get('*', (req, res) => {

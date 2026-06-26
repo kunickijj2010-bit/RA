@@ -66,12 +66,13 @@ function mapStatus(statusStr) {
   return 'Создан';
 }
 
-// Helper to parse dates in format dd.mm.yy or dd/mm/yyyy
+// Helper to parse dates in format dd.mm.yy or dd/mm/yyyy or dd,mm,yy
 function parseDate(dateStr) {
   if (!dateStr || !dateStr.trim()) return new Date().toISOString().split('T')[0];
   const cleaned = dateStr.trim();
   
-  const m = cleaned.match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/);
+  // Strip spaces and match
+  const m = cleaned.replace(/\s/g, '').match(/^(\d{1,2})[.,/](\d{1,2})[.,/](\d{2,4})$/);
   if (m) {
     let day = parseInt(m[1]);
     let month = parseInt(m[2]);
@@ -87,8 +88,12 @@ function parseDate(dateStr) {
       month = temp;
     }
     
-    // Validate date parts range
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2100) {
+    // Clamp day to max days of the month to prevent database insert errors (e.g. September 31 -> September 30)
+    if (month >= 1 && month <= 12 && year >= 1900 && year <= 2100) {
+      const maxDays = new Date(year, month, 0).getDate();
+      if (day > maxDays) {
+        day = maxDays;
+      }
       return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
   }
@@ -98,9 +103,14 @@ function parseDate(dateStr) {
     const parts = cleaned.split('-');
     const y = parseInt(parts[0]);
     const m = parseInt(parts[1]);
-    const d = parseInt(parts[2]);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= 2100) {
-      return cleaned;
+    let d = parseInt(parts[2]);
+    
+    if (m >= 1 && m <= 12 && y >= 1900 && y <= 2100) {
+      const maxDays = new Date(y, m, 0).getDate();
+      if (d > maxDays) {
+        d = maxDays;
+      }
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
   }
   
@@ -179,16 +189,14 @@ async function run() {
   console.log(`🚀 Starting Google Sheets Migration (${dryRun ? 'DRY RUN - SIMULATION' : 'REAL RUN'})`);
 
   if (!fs.existsSync(HTML_FILE_PATH)) {
-    console.error(`❌ HTML File not found at: ${HTML_FILE_PATH}`);
-    process.exit(1);
+    throw new Error(`❌ HTML File not found at: ${HTML_FILE_PATH}`);
   }
 
   // 1. Fetch active validators from database
   console.log("Fetching validators from database...");
   const { data: dbValidators, error: valErr } = await db.from('validators').select('*');
   if (valErr) {
-    console.error("❌ Failed to fetch validators:", valErr.message);
-    process.exit(1);
+    throw new Error("❌ Failed to fetch validators: " + valErr.message);
   }
   console.log(`Found ${dbValidators.length} validators in database.`);
 
@@ -206,17 +214,14 @@ async function run() {
   // 3. For each sheet tab, find if it matches an active validator
   const activeTabs = [];
   for (const m of mappings) {
-    // Clean both names for comparison
     const cleanTab = m.name.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
     let matchedValidator = null;
 
-    // First, try exact clean match
     matchedValidator = dbValidators.find(v => {
       const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
       return cleanCode === cleanTab;
     });
 
-    // Second, if no exact match, try matching by clean normalized values (resolving Cyrillic/Latin homoglyphs)
     if (!matchedValidator) {
       const cyrToLat = {
         'м': 'm', 'в': 'b', 'а': 'a', 'о': 'o', 'к': 'k', 'с': 'c', 'х': 'kh', 'е': 'e', 'т': 't'
@@ -230,7 +235,6 @@ async function run() {
       });
     }
 
-    // Third, fall back to digits-only match if tab name has digits
     const digitsMatch = m.name.match(/\d+/);
     if (!matchedValidator && digitsMatch) {
       const codeNum = digitsMatch[0];
@@ -240,7 +244,6 @@ async function run() {
       });
     }
 
-    // Fourth, fuzzy substring match
     if (!matchedValidator) {
       matchedValidator = dbValidators.find(v => {
         const cleanCode = v.code.toLowerCase().replace(/[^a-zа-я0-9]/g, '').trim();
@@ -265,8 +268,7 @@ async function run() {
   // Fetch existing users to avoid duplicates
   const { data: dbUsers, error: usersErr } = await db.from('users').select('*');
   if (usersErr) {
-    console.error("❌ Failed to fetch users:", usersErr.message);
-    process.exit(1);
+    throw new Error("❌ Failed to fetch users: " + usersErr.message);
   }
   const existingUsernames = new Set(dbUsers.map(u => u.username));
   const existingFullNames = new Set(dbUsers.map(u => u.full_name));
@@ -287,6 +289,32 @@ async function run() {
       if (rows.length < 2) {
         console.log(`  (Empty sheet, skipping)`);
         continue;
+      }
+
+      // Fetch HTML view to detect hidden rows
+      console.log(`  Fetching HTML view to detect hidden rows...`);
+      let visibleRows = null;
+      try {
+        const htmlUrl = `https://docs.google.com/spreadsheets/d/1vuozEZO8tqXysSmY9dyRk-kPVrEcND-3YiT2g66SGzY/htmlview/sheet?headers=true&gid=${tab.gid}`;
+        const htmlRes = await fetch(htmlUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        if (htmlRes.ok) {
+          const htmlText = await htmlRes.text();
+          visibleRows = new Set();
+          const regex = new RegExp(`id="${tab.gid}R(\\d+)"`, 'g');
+          let m;
+          while ((m = regex.exec(htmlText)) !== null) {
+            visibleRows.add(parseInt(m[1]));
+          }
+          console.log(`  Detected ${visibleRows.size} visible rows in HTML view.`);
+        } else {
+          console.log(`  ⚠️ Failed to fetch HTML view (HTTP ${htmlRes.status}). Defaulting to all rows visible.`);
+        }
+      } catch (htmlErr) {
+        console.log(`  ⚠️ Error fetching HTML view: ${htmlErr.message}. Defaulting to all rows visible.`);
       }
 
       // Dynamic column mapping based on headers
@@ -312,7 +340,7 @@ async function run() {
           continue;
         }
         
-        // Ticket number check (must not match otrs ticket# or ticket_id)
+        // Ticket number check
         if ((h.includes('билет') || h === 'ticket_number' || h === 'tkt') && colTicket === -1) {
           colTicket = idx;
         }
@@ -320,7 +348,7 @@ async function run() {
         else if ((h.includes('тикет') || h.includes('ticket') || h.includes('otrs') || h.includes('номер заявки')) && colOtrs === -1) {
           colOtrs = idx;
         }
-        // RA check (both Latin 'ra' and Cyrillic 'ра')
+        // RA check
         const cleanH = h.replace(/[^a-zа-я0-9\s#]/g, '').trim();
         const isRaHeader = 
           cleanH === 'номер ра' ||
@@ -343,8 +371,9 @@ async function run() {
           colRa = idx;
         }
         
-        // Date check
-        if (h.includes('дата') || h.includes('date')) {
+        // Date check (matches header word 'дата'/'date' or matches format dd.mm.yy etc)
+        const isDateHeader = h.includes('дата') || h.includes('date') || h.replace(/\s/g, '').match(/^\d{1,2}[.,/]\d{1,2}[.,/]\d{2,4}$/);
+        if (isDateHeader) {
           if (colDate === -1) colDate = idx;
           else colStatusDate = idx;
         }
@@ -383,14 +412,12 @@ async function run() {
 
       console.log(`  Mapping: ticket=${colTicket}, otrs=${colOtrs}, ra=${colRa}, date=${colDate}, amount=${colAmount}, agent=${colAgent}, operator=${colOperator}, status=${colStatus}, equiv=${colEquivalent}, comment=${colComment}`);
 
-      // Determine default currency for the tab
       let defaultCurrency = 'RUB';
       if (tab.tabName.toLowerCase().includes('turkish') || tab.tabName.toLowerCase().includes('tl')) defaultCurrency = 'TRY';
       else if (tab.tabName.toLowerCase().includes('казахстан') || tab.tabName.toLowerCase().includes('kzt')) defaultCurrency = 'KZT';
       else if (tab.tabName.toLowerCase().includes('дубай') || tab.tabName.toLowerCase().includes('aed')) defaultCurrency = 'AED';
       else if (tab.tabName.toLowerCase().includes('екб')) defaultCurrency = 'RUB';
 
-      // Check if amount column header specifies currency and override if so
       if (colAmount !== -1 && header[colAmount]) {
         const amountHeader = header[colAmount].toLowerCase();
         if (amountHeader.includes('руб') || amountHeader.includes('rub')) {
@@ -411,41 +438,37 @@ async function run() {
       let parsedCount = 0;
       for (let rIdx = 1; rIdx < rows.length; rIdx++) {
         const row = rows[rIdx];
-        // Skip empty rows instead of stopping to ensure we capture all data after empty spacer lines
         if (row.length === 0 || row.join('').trim() === '') {
           continue;
         }
-        if (!row[0]) continue; // Skip rows where the first cell is empty
+        if (!row[0]) continue;
 
         const ticketRaw = colTicket !== -1 ? row[colTicket] : '';
         let ticketNum = ticketRaw.replace(/\D/g, '');
-        if (!ticketNum || ticketNum.length < 10) continue; // Skip invalid ticket numbers
+        if (!ticketNum || ticketNum.length < 10) continue;
         if (ticketNum.length > 13) ticketNum = ticketNum.substring(0, 13);
 
-        // Parse operator names
         const requestedBy = colOperator !== -1 && row[colOperator] ? row[colOperator].trim() : 'Система';
         const changedBy = colModifier !== -1 && row[colModifier] ? row[colModifier].trim() : '';
 
         if (requestedBy && requestedBy !== 'Система' && requestedBy !== 'СОФИ') newOperators.add(requestedBy);
         if (changedBy && changedBy !== 'Система' && changedBy !== 'СОФИ') newOperators.add(changedBy);
 
-        // Parse amount and currency
         const rawAmountStr = colAmount !== -1 ? row[colAmount] : '';
         const { amount, currency } = parseAmountCurrency(rawAmountStr, defaultCurrency);
 
-        // Parse status
         const rawStatus = colStatus !== -1 ? row[colStatus] : '';
         const status = mapStatus(rawStatus);
 
-        // Parse dates
         const rawDate = colDate !== -1 ? row[colDate] : '';
         const requestDate = parseDate(rawDate);
 
-        // Parse equivalent
         const rawEquiv = colEquivalent !== -1 ? row[colEquivalent] : '';
         const agentRefundEquivalent = parseEquivalent(rawEquiv);
 
-        // Build refund application object
+        // Check if row is hidden (archived) in Google Sheets
+        const isArchived = visibleRows ? !visibleRows.has(rIdx) : false;
+
         const refundApplication = {
           ticket_number: ticketNum,
           system_type: tab.systemType,
@@ -461,7 +484,8 @@ async function run() {
           support_ticket: colOtrs !== -1 && row[colOtrs] ? row[colOtrs].trim().replace(/\D/g, '') || '0' : '0',
           bsp_request_number: tab.systemType === 'BSP Link' && colRa !== -1 && row[colRa] ? row[colRa].trim().replace(/\D/g, '') : null,
           tch_request_number: tab.systemType === 'TCH Connect' && colRa !== -1 && row[colRa] ? row[colRa].trim().replace(/\D/g, '') : null,
-          comment: colComment !== -1 && row[colComment] ? row[colComment].trim() : ''
+          comment: colComment !== -1 && row[colComment] ? row[colComment].trim() : '',
+          is_archived: isArchived
         };
 
         rawApplications.push(refundApplication);
@@ -480,12 +504,11 @@ async function run() {
   const generatedLogins = new Set(dbUsers.map(u => u.username));
 
   for (const opName of newOperators) {
-    if (existingFullNames.has(opName)) continue; // Already registered
+    if (existingFullNames.has(opName)) continue;
 
     const baseUsername = generateUsername(opName);
     if (!baseUsername) continue;
 
-    // Resolve duplicate usernames
     let finalUsername = baseUsername;
     let counter = 1;
     while (generatedLogins.has(finalUsername)) {
@@ -507,15 +530,8 @@ async function run() {
   }
 
   console.log(`Operators ready to register: ${operatorsToInsert.length}`);
-  if (operatorsToInsert.length > 0) {
-    console.log("Sample accounts mapping:");
-    operatorsToInsert.slice(0, 5).forEach(o => {
-      console.log(`  - Name: '${o.full_name}' -> Login: '${o.username}', Pass: '${o.username}123'`);
-    });
-    if (operatorsToInsert.length > 5) console.log(`  ... and ${operatorsToInsert.length - 5} more.`);
-  }
 
-  // De-duplicate applications by composite key to avoid duplicate key issues within the same batch/run
+  // De-duplicate applications by composite key
   const uniqueAppsMap = new Map();
   for (const app of rawApplications) {
     const key = `${app.ticket_number}_${app.bsp_request_number || ''}_${app.tch_request_number || ''}`;
@@ -523,7 +539,6 @@ async function run() {
     if (!existing) {
       uniqueAppsMap.set(key, app);
     } else {
-      // Overwrite if new one is later in date, or has higher status priority
       const dateA = new Date(existing.request_date).getTime();
       const dateB = new Date(app.request_date).getTime();
       
@@ -537,7 +552,11 @@ async function run() {
       const pExisting = statusPriority[existing.status] || 0;
       const pNew = statusPriority[app.status] || 0;
       
-      if (dateB > dateA || (dateB === dateA && pNew >= pExisting)) {
+      const preferNew = (!existing.is_archived && app.is_archived) ? false :
+                        (existing.is_archived && !app.is_archived) ? true :
+                        (dateB > dateA) ? true :
+                        (dateB === dateA && pNew >= pExisting) ? true : false;
+      if (preferNew) {
         uniqueAppsMap.set(key, app);
       }
     }
@@ -550,13 +569,12 @@ async function run() {
     console.log("\n================ DRY RUN SUMMARY ================");
     console.log(`Operators that would be added: ${operatorsToInsert.length}`);
     console.log(`Applications parsed and ready: ${deDuplicatedApplications.length}`);
-    
-    // Sample parsed row
     if (deDuplicatedApplications.length > 0) {
       console.log("Sample application item parsed:");
       console.log(JSON.stringify(deDuplicatedApplications[0], null, 2));
     }
     console.log("=================================================");
+    return { processed: deDuplicatedApplications.length, inserted: 0, updated: 0, skipped: 0 };
   } else {
     // A. Insert Operators
     if (operatorsToInsert.length > 0) {
@@ -569,21 +587,20 @@ async function run() {
       }
     }
 
-    // B. Insert Refund Applications (Batching of 200 items to fit PostgREST size limits)
-    console.log(`\nInserting ${deDuplicatedApplications.length} refund applications...`);
+    // B. Insert/Update Refund Applications (Batching of 200 items to fit PostgREST size limits)
+    console.log(`\nProcessing ${deDuplicatedApplications.length} refund applications...`);
     const batchSize = 200;
     let insertedCount = 0;
+    let updatedCount = 0;
     let skippedCount = 0;
 
     for (let i = 0; i < deDuplicatedApplications.length; i += batchSize) {
       const batch = deDuplicatedApplications.slice(i, i + batchSize);
       
-      // PostgREST doesn't support 'ON CONFLICT DO NOTHING' directly in JSON payload standard,
-      // but we can query existing ticket numbers in this batch, filter them out, and insert only the new ones.
       const batchTickets = batch.map(a => a.ticket_number);
       const { data: existingApps, error: chkErr } = await db
         .from('refund_applications')
-        .select('ticket_number, bsp_request_number, tch_request_number')
+        .select('*')
         .in('ticket_number', batchTickets);
 
       if (chkErr) {
@@ -591,18 +608,43 @@ async function run() {
         continue;
       }
 
-      const existingSet = new Set(existingApps.map(a => 
-        `${a.ticket_number}_${a.bsp_request_number || ''}_${a.tch_request_number || ''}`
-      ));
-      const filteredBatch = batch.filter(a => 
-        !existingSet.has(`${a.ticket_number}_${a.bsp_request_number || ''}_${a.tch_request_number || ''}`)
-      );
-      
-      skippedCount += (batch.length - filteredBatch.length);
+      const existingMap = new Map(existingApps.map(a => [
+        `${a.ticket_number}_${a.bsp_request_number || ''}_${a.tch_request_number || ''}`,
+        a
+      ]));
 
-      if (filteredBatch.length > 0) {
-        // Exclude comment field from insert payload as it doesn't exist on refund_applications table
-        const insertPayload = filteredBatch.map(({ comment, ...rest }) => rest);
+      const toInsert = [];
+      const toUpdate = [];
+
+      for (const app of batch) {
+        const key = `${app.ticket_number}_${app.bsp_request_number || ''}_${app.tch_request_number || ''}`;
+        const dbApp = existingMap.get(key);
+        if (!dbApp) {
+          toInsert.push(app);
+        } else {
+          // Check if fields changed
+          const hasChanged = 
+            app.status !== dbApp.status ||
+            app.amount !== dbApp.amount ||
+            app.currency !== dbApp.currency ||
+            app.is_archived !== dbApp.is_archived ||
+            app.agent_name !== dbApp.agent_name ||
+            (app.agent_refund_equivalent !== null && dbApp.agent_refund_equivalent !== null ? 
+             Math.abs(app.agent_refund_equivalent - dbApp.agent_refund_equivalent) > 0.01 : 
+             app.agent_refund_equivalent !== dbApp.agent_refund_equivalent) ||
+            app.support_ticket !== dbApp.support_ticket;
+
+          if (hasChanged) {
+            toUpdate.push({ app, dbApp });
+          } else {
+            skippedCount++;
+          }
+        }
+      }
+
+      // 1. Perform Inserts
+      if (toInsert.length > 0) {
+        const insertPayload = toInsert.map(({ comment, ...rest }) => rest);
 
         const { data: insertedApps, error: insertAppsErr } = await db
           .from('refund_applications')
@@ -612,13 +654,13 @@ async function run() {
         if (insertAppsErr) {
           console.error(`❌ Batch insert failed [${i} to ${i + batch.length}]:`, insertAppsErr.message);
         } else {
-          insertedCount += filteredBatch.length;
+          insertedCount += toInsert.length;
 
           // Insert comments into status_history
           if (insertedApps && insertedApps.length > 0) {
             const historyBatch = [];
             for (const app of insertedApps) {
-              const original = filteredBatch.find(a => 
+              const original = toInsert.find(a => 
                 a.ticket_number === app.ticket_number &&
                 (a.bsp_request_number || '') === (app.bsp_request_number || '') &&
                 (a.tch_request_number || '') === (app.tch_request_number || '')
@@ -635,21 +677,71 @@ async function run() {
             if (historyBatch.length > 0) {
               const { error: histErr } = await db.from('status_history').insert(historyBatch);
               if (histErr) {
-                console.error(`  ⚠️ Warning: status history insert failed for batch starting at ${i}:`, histErr.message);
+                console.error(`  ⚠️ Warning: status history insert failed for batch:`, histErr.message);
               }
+            }
+          }
+        }
+      }
+
+      // 2. Perform Updates
+      if (toUpdate.length > 0) {
+        for (const { app, dbApp } of toUpdate) {
+          const { comment, ...updatePayload } = app;
+          const { error: updateErr } = await db
+            .from('refund_applications')
+            .update(updatePayload)
+            .eq('id', dbApp.id);
+
+          if (updateErr) {
+            console.error(`❌ Update failed for ticket ${app.ticket_number}:`, updateErr.message);
+          } else {
+            updatedCount++;
+            
+            if (app.status !== dbApp.status || app.is_archived !== dbApp.is_archived) {
+              const oldStatusDesc = dbApp.is_archived ? `${dbApp.status} (Архив)` : dbApp.status;
+              const newStatusDesc = app.is_archived ? `${app.status} (Архив)` : app.status;
+              
+              const { error: histErr } = await db
+                .from('status_history')
+                .insert([
+                  {
+                    application_id: dbApp.id,
+                    old_status: oldStatusDesc,
+                    new_status: newStatusDesc,
+                    changed_by: app.requested_by || 'Система',
+                    comment: app.comment || 'Изменение параметров при синхронизации'
+                  }
+                ]);
+              if (histErr) console.error(`  ⚠️ Warning: status history update failed for ${app.ticket_number}:`, histErr.message);
             }
           }
         }
       }
     }
 
-    console.log(`\n⚡ Migration completed!`);
-    console.log(`   Total applications processed: ${deDuplicatedApplications.length}`);
-    console.log(`   Successfully imported: ${insertedCount}`);
-    console.log(`   Skipped (already exist): ${skippedCount}`);
-  }
+    console.log(`\n⚡ Sync completed!`);
+    console.log(`   Processed: ${deDuplicatedApplications.length}`);
+    console.log(`   Imported (new): ${insertedCount}`);
+    console.log(`   Updated (changed): ${updatedCount}`);
+    console.log(`   Skipped (no change): ${skippedCount}`);
 
-  process.exit(0);
+    return {
+      processed: deDuplicatedApplications.length,
+      inserted: insertedCount,
+      updated: updatedCount,
+      skipped: skippedCount
+    };
+  }
 }
 
-run();
+if (require.main === module) {
+  run().then(() => process.exit(0)).catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  run
+};
