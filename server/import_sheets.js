@@ -411,10 +411,9 @@ async function run() {
       let parsedCount = 0;
       for (let rIdx = 1; rIdx < rows.length; rIdx++) {
         const row = rows[rIdx];
-        // Stop parsing this tab as soon as we encounter a completely empty row
+        // Skip empty rows instead of stopping to ensure we capture all data after empty spacer lines
         if (row.length === 0 || row.join('').trim() === '') {
-          console.log(`  (Reached empty row at line ${rIdx + 1}, stopping parsing for this tab)`);
-          break;
+          continue;
         }
         if (!row[0]) continue; // Skip rows where the first cell is empty
 
