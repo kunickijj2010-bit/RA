@@ -95,6 +95,58 @@ function mapStatus(statusStr) {
   return 'Создан';
 }
 
+// Clean and normalize operator names to prevent duplicate user creation due to initials or typos
+function cleanOperatorName(name) {
+  if (!name) return 'Система';
+  let cleaned = name.trim();
+  if (!cleaned || cleaned === '-' || cleaned === '—' || cleaned.toLowerCase() === 'софи' || cleaned.toLowerCase() === 'система') {
+    return 'Система';
+  }
+  
+  if (cleaned.toLowerCase().includes('в случае любого результата')) {
+    return 'Система';
+  }
+
+  // Handle specific prefix typo like 'мШляхтун'
+  if (cleaned.startsWith('мШляхтун')) {
+    cleaned = 'Шляхтун';
+  }
+
+  // Extract first word (which is the last name/фамилия)
+  let firstWord = cleaned.split(/[\s,]+/)[0];
+  
+  // Strip trailing punctuation
+  firstWord = firstWord.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+
+  // Normalize case (Capitalize first letter, lowercase the rest)
+  if (firstWord.length > 0) {
+    firstWord = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+  }
+
+  // Canonical typo mappings
+  const typoMap = {
+    'Яциснкая': 'Яцинская',
+    'Мелякоа': 'Мелякова',
+    'Сафронва': 'Сафронова',
+    'Сафроонова': 'Сафронова',
+    'Эрикинбекова': 'Эркинбекова',
+    'Эрикнбекова': 'Эркинбекова',
+    'Ульяова': 'Ульянова',
+    'Шена': 'Шеина',
+    'Торпкина': 'Торопкина',
+    'Захорова': 'Захарова',
+    'Мшляхтун': 'Шляхтун',
+    'Рябых': 'Рябых',
+    'Федоров': 'Федоров',
+  };
+
+  if (typoMap[firstWord]) {
+    return typoMap[firstWord];
+  }
+
+  return firstWord;
+}
+
 // Helper to parse dates in format dd.mm.yy or dd/mm/yyyy or dd,mm,yy
 function parseDate(dateStr) {
   if (!dateStr || !dateStr.trim()) return new Date().toISOString().split('T')[0];
@@ -151,12 +203,13 @@ function parseAmountCurrency(amountStr, defaultCurrency = 'EUR') {
   if (!amountStr || !amountStr.trim()) return { amount: 0, currency: defaultCurrency };
   const cleaned = amountStr.trim().replace(/\s/g, '').replace(/,/g, '.');
   
-  const currencyMatch = cleaned.match(/(KZT|TRY|AED|RUB|EUR|USD|руб|TL|AED)/i);
+  const currencyMatch = cleaned.match(/(KZT|TRY|AED|RUB|EUR|USD|руб|TL|AED|UZS|сум|som)/i);
   let currency = defaultCurrency;
   if (currencyMatch) {
     const cur = currencyMatch[1].toUpperCase();
     if (cur === 'РУБ') currency = 'RUB';
     else if (cur === 'TL') currency = 'TRY';
+    else if (cur === 'СУМ' || cur === 'SOM') currency = 'UZS';
     else currency = cur;
   }
   
@@ -442,10 +495,12 @@ async function run() {
       console.log(`  Mapping: ticket=${colTicket}, otrs=${colOtrs}, ra=${colRa}, date=${colDate}, amount=${colAmount}, agent=${colAgent}, operator=${colOperator}, status=${colStatus}, equiv=${colEquivalent}, comment=${colComment}`);
 
       let defaultCurrency = 'RUB';
-      if (tab.tabName.toLowerCase().includes('turkish') || tab.tabName.toLowerCase().includes('tl')) defaultCurrency = 'TRY';
-      else if (tab.tabName.toLowerCase().includes('казахстан') || tab.tabName.toLowerCase().includes('kzt')) defaultCurrency = 'KZT';
-      else if (tab.tabName.toLowerCase().includes('дубай') || tab.tabName.toLowerCase().includes('aed')) defaultCurrency = 'AED';
-      else if (tab.tabName.toLowerCase().includes('екб')) defaultCurrency = 'RUB';
+      const tabNameLower = tab.tabName.toLowerCase();
+      if (tabNameLower.includes('turkish') || tabNameLower.includes('tl')) defaultCurrency = 'TRY';
+      else if (tabNameLower.includes('казахстан') || tabNameLower.includes('kzt')) defaultCurrency = 'KZT';
+      else if (tabNameLower.includes('дубай') || tabNameLower.includes('aed')) defaultCurrency = 'AED';
+      else if (tabNameLower.includes('узбек') || tabNameLower.includes('uzb') || tabNameLower.includes('uzs')) defaultCurrency = 'UZS';
+      else if (tabNameLower.includes('екб')) defaultCurrency = 'RUB';
 
       if (colAmount !== -1 && header[colAmount]) {
         const amountHeader = header[colAmount].toLowerCase();
@@ -461,6 +516,8 @@ async function run() {
           defaultCurrency = 'TRY';
         } else if (amountHeader.includes('aed') || amountHeader.includes('дирх')) {
           defaultCurrency = 'AED';
+        } else if (amountHeader.includes('uzs') || amountHeader.includes('сум') || amountHeader.includes('som')) {
+          defaultCurrency = 'UZS';
         }
       }
 
@@ -477,11 +534,11 @@ async function run() {
         if (!ticketNum || ticketNum.length < 10) continue;
         if (ticketNum.length > 13) ticketNum = ticketNum.substring(0, 13);
 
-        const requestedBy = colOperator !== -1 && row[colOperator] ? row[colOperator].trim() : 'Система';
-        const changedBy = colModifier !== -1 && row[colModifier] ? row[colModifier].trim() : '';
+        const requestedBy = colOperator !== -1 && row[colOperator] ? cleanOperatorName(row[colOperator]) : 'Система';
+        const changedBy = colModifier !== -1 && row[colModifier] ? cleanOperatorName(row[colModifier]) : '';
 
-        if (requestedBy && requestedBy !== 'Система' && requestedBy !== 'СОФИ') newOperators.add(requestedBy);
-        if (changedBy && changedBy !== 'Система' && changedBy !== 'СОФИ') newOperators.add(changedBy);
+        if (requestedBy && requestedBy !== 'Система') newOperators.add(requestedBy);
+        if (changedBy && changedBy !== 'Система') newOperators.add(changedBy);
 
         const rawAmountStr = colAmount !== -1 ? row[colAmount] : '';
         const { amount, currency } = parseAmountCurrency(rawAmountStr, defaultCurrency);
@@ -684,6 +741,7 @@ async function run() {
             app.currency !== dbApp.currency ||
             app.is_archived !== dbApp.is_archived ||
             app.agent_name !== dbApp.agent_name ||
+            app.requested_by !== dbApp.requested_by ||
             (app.agent_refund_equivalent !== null && dbApp.agent_refund_equivalent !== null ? 
              Math.abs(app.agent_refund_equivalent - dbApp.agent_refund_equivalent) > 0.01 : 
              app.agent_refund_equivalent !== dbApp.agent_refund_equivalent) ||
@@ -739,36 +797,45 @@ async function run() {
         }
       }
 
-      // 2. Perform Updates
+      // 2. Perform Updates (Bulk upsert to avoid thousands of sequential HTTP requests)
       if (toUpdate.length > 0) {
-        for (const { app, dbApp } of toUpdate) {
-          const { comment, ...updatePayload } = app;
-          const { error: updateErr } = await db
-            .from('refund_applications')
-            .update(updatePayload)
-            .eq('id', dbApp.id);
+        const updatePayloads = toUpdate.map(({ app, dbApp }) => ({
+          id: dbApp.id,
+          ...app
+        }));
+        
+        // Remove 'comment' property which is not in the database table
+        const cleanUpdatePayloads = updatePayloads.map(({ comment, ...rest }) => rest);
 
-          if (updateErr) {
-            console.error(`❌ Update failed for ticket ${app.ticket_number}:`, updateErr.message);
-          } else {
-            updatedCount++;
-            
+        const { error: updateAppsErr } = await db
+          .from('refund_applications')
+          .upsert(cleanUpdatePayloads);
+
+        if (updateAppsErr) {
+          console.error(`❌ Batch update failed [${i} to ${i + batch.length}]:`, updateAppsErr.message);
+        } else {
+          updatedCount += toUpdate.length;
+
+          // Write status history records in batch
+          const historyBatch = [];
+          for (const { app, dbApp } of toUpdate) {
             if (app.status !== dbApp.status || app.is_archived !== dbApp.is_archived) {
               const oldStatusDesc = dbApp.is_archived ? `${dbApp.status} (Архив)` : dbApp.status;
               const newStatusDesc = app.is_archived ? `${app.status} (Архив)` : app.status;
-              
-              const { error: histErr } = await db
-                .from('status_history')
-                .insert([
-                  {
-                    application_id: dbApp.id,
-                    old_status: oldStatusDesc,
-                    new_status: newStatusDesc,
-                    changed_by: app.requested_by || 'Система',
-                    comment: app.comment || 'Изменение параметров при синхронизации'
-                  }
-                ]);
-              if (histErr) console.error(`  ⚠️ Warning: status history update failed for ${app.ticket_number}:`, histErr.message);
+              historyBatch.push({
+                application_id: dbApp.id,
+                old_status: oldStatusDesc,
+                new_status: newStatusDesc,
+                changed_by: app.requested_by || 'Система',
+                comment: app.comment || 'Изменение параметров при синхронизации'
+              });
+            }
+          }
+
+          if (historyBatch.length > 0) {
+            const { error: histErr } = await db.from('status_history').insert(historyBatch);
+            if (histErr) {
+              console.error(`  ⚠️ Warning: status history update failed for batch:`, histErr.message);
             }
           }
         }

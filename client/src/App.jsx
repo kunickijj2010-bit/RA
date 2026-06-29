@@ -2,7 +2,42 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
-const CURRENCIES = ['EUR', 'USD', 'RUB', 'TRY', 'KGS', 'KZT', 'AED'];
+const CURRENCIES = ['EUR', 'USD', 'RUB', 'TRY', 'KGS', 'KZT', 'AED', 'UZS'];
+
+const getLocalDateString = (dateInput) => {
+  if (!dateInput) return '';
+  if (typeof dateInput === 'string' && dateInput.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return dateInput.substring(0, 10);
+  }
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatDateString = (dateStr) => {
+  if (!dateStr) return '—';
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    return `${m[3]}.${m[2]}.${m[1]}`;
+  }
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '—';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
 const AGENTS = [
   "Emerging Travel Inc. (0CK9)",
   "Alfa Travel LLC (1AB2)",
@@ -203,7 +238,7 @@ export default function App() {
     tch_request_number: '',
     system_type: 'BSP Link',
     validator: '',
-    request_date: new Date().toISOString().split('T')[0],
+    request_date: getLocalDateString(new Date()),
     amount_eur: '', // maps to amount
     currency: 'EUR',
     agent_refund_equivalent: '',
@@ -274,7 +309,7 @@ export default function App() {
         tch_request_number: '',
         system_type: 'BSP Link',
         validator: '',
-        request_date: new Date().toISOString().split('T')[0],
+        request_date: getLocalDateString(new Date()),
         amount_eur: '',
         currency: 'EUR',
         agent_refund_equivalent: '',
@@ -481,7 +516,7 @@ export default function App() {
           tch_request_number: '',
           system_type: 'BSP Link',
           validator: validators[0]?.code || 'SU',
-          request_date: new Date().toISOString().split('T')[0],
+          request_date: getLocalDateString(new Date()),
           amount_eur: '',
           currency: 'EUR',
           agent_refund_equivalent: '',
@@ -623,7 +658,7 @@ export default function App() {
           tch_request_number: '',
           system_type: 'BSP Link',
           validator: validators[0]?.code || 'SU',
-          request_date: new Date().toISOString().split('T')[0],
+          request_date: getLocalDateString(new Date()),
           amount_eur: '',
           currency: 'EUR',
           agent_refund_equivalent: '',
@@ -733,20 +768,16 @@ export default function App() {
   };
 
   const handleDateClick = (dateVal) => {
-    if (!dateVal) return;
-    try {
-      const formatted = new Date(dateVal).toISOString().split('T')[0];
-      if (dateStart === formatted && dateEnd === formatted) {
-        setDateStart('');
-        setDateEnd('');
-      } else {
-        setDateStart(formatted);
-        setDateEnd(formatted);
-      }
-      setPage(1);
-    } catch (e) {
-      console.error("Error formatting date click:", e);
+    const formatted = getLocalDateString(dateVal);
+    if (!formatted) return;
+    if (dateStart === formatted && dateEnd === formatted) {
+      setDateStart('');
+      setDateEnd('');
+    } else {
+      setDateStart(formatted);
+      setDateEnd(formatted);
     }
+    setPage(1);
   };
 
   const handleSort = (field) => {
@@ -1470,7 +1501,7 @@ export default function App() {
                 refunds.map(refund => {
                   const isWarning = isTicketWarning(refund);
                   const isDiscrepancy = refund.status === 'авторизовано с расхождением';
-                  const formattedDate = refund.request_date ? new Date(refund.request_date).toISOString().split('T')[0] : '';
+                  const formattedDate = getLocalDateString(refund.request_date);
                   
                   // Filter alignment indicators
                   const isDateFiltered = dateStart === formattedDate && dateEnd === formattedDate;
@@ -1538,7 +1569,7 @@ export default function App() {
                         title={isDateFiltered ? "Кликните для сброса фильтра по дате" : "Кликните для фильтрации по этой дате"}
                         onClick={() => handleDateClick(refund.request_date)}
                       >
-                        {new Date(refund.request_date).toLocaleDateString('ru-RU')}
+                        {formatDateString(refund.request_date)}
                       </td>
                       <td style={{ fontWeight: '500' }}>
                         {isDiscrepancy ? (
