@@ -137,6 +137,10 @@ export default function App() {
   const [archiveFilter, setArchiveFilter] = useState('active'); // 'active', 'archived', 'all'
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Sorting State
+  const [sortBy, setSortBy] = useState('updated_at');
+  const [sortDir, setSortDir] = useState('desc');
+
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -249,7 +253,7 @@ export default function App() {
       fetchRefunds();
       fetchStats();
     }
-  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter, archiveFilter]);
+  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter, archiveFilter, sortBy, sortDir]);
 
   useEffect(() => {
     if (token) {
@@ -343,7 +347,9 @@ export default function App() {
         only_warnings: onlyWarningsFilter ? 'true' : 'false',
         only_pending: onlyPendingFilter ? 'true' : 'false',
         only_mine: onlyMineFilter ? 'true' : 'false',
-        archive_status: archiveFilter
+        archive_status: archiveFilter,
+        sort_by: sortBy,
+        sort_dir: sortDir
       });
       const res = await apiFetch(`/refunds?${query}`);
       const data = await res.json();
@@ -683,6 +689,101 @@ export default function App() {
     setPage(1);
   };
 
+  const handleSystemClick = (sys) => {
+    if (systemFilter === sys) {
+      setSystemFilter('');
+      setValidatorFilter('');
+    } else {
+      setSystemFilter(sys);
+      // Clear validator if it doesn't belong to the selected system
+      const matchedVal = validators.find(v => v.code === validatorFilter);
+      if (matchedVal && matchedVal.system_type !== sys) {
+        setValidatorFilter('');
+      }
+    }
+    setPage(1);
+  };
+
+  const handleValidatorClick = (sys, val) => {
+    if (validatorFilter === val) {
+      setValidatorFilter('');
+    } else {
+      setSystemFilter(sys);
+      setValidatorFilter(val);
+    }
+    setPage(1);
+  };
+
+  const handleSearchClick = (val) => {
+    if (search === val) {
+      setSearch('');
+    } else {
+      setSearch(val);
+    }
+    setPage(1);
+  };
+
+  const handleStatusClick = (status) => {
+    if (statusFilter === status) {
+      setStatusFilter('');
+    } else {
+      setStatusFilter(status);
+    }
+    setPage(1);
+  };
+
+  const handleDateClick = (dateVal) => {
+    if (!dateVal) return;
+    try {
+      const formatted = new Date(dateVal).toISOString().split('T')[0];
+      if (dateStart === formatted && dateEnd === formatted) {
+        setDateStart('');
+        setDateEnd('');
+      } else {
+        setDateStart(formatted);
+        setDateEnd(formatted);
+      }
+      setPage(1);
+    } catch (e) {
+      console.error("Error formatting date click:", e);
+    }
+  };
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      if (sortDir === 'desc') {
+        setSortDir('asc');
+      } else {
+        setSortBy('updated_at');
+        setSortDir('desc');
+      }
+    } else {
+      setSortBy(field);
+      setSortDir('desc');
+    }
+    setPage(1);
+  };
+
+  const renderHeader = (label, field) => {
+    const isSorted = sortBy === field;
+    return (
+      <th 
+        className="sortable-th"
+        onClick={() => handleSort(field)}
+        title={`Нажмите для сортировки по ${label.toLowerCase()}`}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>{label}</span>
+          {isSorted ? (
+            sortDir === 'asc' ? '▲' : '▼'
+          ) : (
+            <span style={{ opacity: 0.2, fontSize: '0.75rem' }}>⇅</span>
+          )}
+        </div>
+      </th>
+    );
+  };
+
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('');
@@ -694,6 +795,8 @@ export default function App() {
     setOnlyPendingFilter(false);
     setOnlyMineFilter(false);
     setArchiveFilter('active');
+    setSortBy('updated_at');
+    setSortDir('desc');
     setPage(1);
   };
 
@@ -1344,15 +1447,15 @@ export default function App() {
           <table className="refunds-table">
             <thead>
               <tr>
-                <th>Билет</th>
-                <th>Подключение</th>
-                <th>Запрос BSP / TCH</th>
-                <th>Дата создания</th>
-                <th>Сумма к возврату</th>
-                <th>Эквивалент</th>
-                <th>Агент получатель</th>
-                <th>Создал</th>
-                <th>Статус</th>
+                {renderHeader('Билет', 'ticket_number')}
+                {renderHeader('Подключение', 'system_type')}
+                {renderHeader('Запрос BSP / TCH', 'bsp_request_number')}
+                {renderHeader('Дата создания', 'request_date')}
+                {renderHeader('Сумма к возврату', 'amount')}
+                {renderHeader('Эквивалент', 'agent_refund_equivalent')}
+                {renderHeader('Агент получатель', 'agent_name')}
+                {renderHeader('Создал', 'requested_by')}
+                {renderHeader('Статус', 'status')}
                 <th>Действия</th>
               </tr>
             </thead>
@@ -1367,6 +1470,16 @@ export default function App() {
                 refunds.map(refund => {
                   const isWarning = isTicketWarning(refund);
                   const isDiscrepancy = refund.status === 'авторизовано с расхождением';
+                  const formattedDate = refund.request_date ? new Date(refund.request_date).toISOString().split('T')[0] : '';
+                  
+                  // Filter alignment indicators
+                  const isDateFiltered = dateStart === formattedDate && dateEnd === formattedDate;
+                  const isSystemFiltered = systemFilter === refund.system_type;
+                  const isValidatorFiltered = validatorFilter === refund.validator;
+                  const isAgentFiltered = search === refund.agent_name;
+                  const isCreatorFiltered = search === refund.requested_by;
+                  const isStatusFiltered = statusFilter === refund.status;
+
                   return (
                     <tr key={refund.id} className={isWarning ? 'warning-row' : ''}>
                       <td style={{ fontWeight: '600' }}>
@@ -1384,17 +1497,15 @@ export default function App() {
                       </td>
                       <td>
                         <span 
-                          className="badge badge-system" 
-                          style={{ cursor: 'pointer' }}
-                          title="Кликните для фильтрации по подключению"
-                          onClick={() => { setSystemFilter(refund.system_type); setPage(1); }}
+                          className={`badge badge-system ${isSystemFiltered ? 'badge-active-filter' : ''}`}
+                          title={isSystemFiltered ? "Кликните для сброса фильтра по подключению" : "Кликните для фильтрации по подключению"}
+                          onClick={() => handleSystemClick(refund.system_type)}
                         >
                           {refund.system_type}
                         </span>
                         <span 
-                          className="badge badge-validator" 
+                          className={`badge badge-validator ${isValidatorFiltered ? 'badge-active-filter' : ''}`}
                           style={{ 
-                            cursor: 'pointer', 
                             marginLeft: '4px',
                             background: 'rgba(99, 102, 241, 0.12)',
                             border: '1px solid rgba(99, 102, 241, 0.25)',
@@ -1404,8 +1515,8 @@ export default function App() {
                             fontSize: '0.75rem',
                             fontWeight: '500'
                           }}
-                          title={`Кликните для фильтрации по валидатору ${refund.validator}`}
-                          onClick={() => { setValidatorFilter(refund.validator); setPage(1); }}
+                          title={isValidatorFiltered ? `Кликните для сброса фильтра по валидатору ${refund.validator}` : `Кликните для фильтрации по валидатору ${refund.validator}`}
+                          onClick={() => handleValidatorClick(refund.system_type, refund.validator)}
                         >
                           {refund.validator}
                         </span>
@@ -1422,7 +1533,13 @@ export default function App() {
                           {!refund.bsp_request_number && !refund.tch_request_number && <span style={{ color: 'var(--text-muted)' }}>—</span>}
                         </div>
                       </td>
-                      <td>{new Date(refund.request_date).toLocaleDateString('ru-RU')}</td>
+                      <td 
+                        className={`cell-clickable-filter ${isDateFiltered ? 'cell-active-filter' : ''}`}
+                        title={isDateFiltered ? "Кликните для сброса фильтра по дате" : "Кликните для фильтрации по этой дате"}
+                        onClick={() => handleDateClick(refund.request_date)}
+                      >
+                        {new Date(refund.request_date).toLocaleDateString('ru-RU')}
+                      </td>
                       <td style={{ fontWeight: '500' }}>
                         {isDiscrepancy ? (
                           <div>
@@ -1443,18 +1560,18 @@ export default function App() {
                           : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
                       <td 
-                        style={{ cursor: 'pointer' }} 
-                        title="Кликните для поиска по этому агенту" 
-                        onClick={() => { setSearch(refund.agent_name); setPage(1); }}
+                        className={`cell-clickable-filter ${isAgentFiltered ? 'cell-active-filter' : ''}`}
+                        title={isAgentFiltered ? "Кликните для сброса поиска по этому агенту" : "Кликните для поиска по этому агенту"}
+                        onClick={() => handleSearchClick(refund.agent_name)}
                       >
                         <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {refund.agent_name}
                         </div>
                       </td>
                       <td 
-                        style={{ cursor: 'pointer' }} 
-                        title="Кликните для поиска по этому создателю" 
-                        onClick={() => { setSearch(refund.requested_by); setPage(1); }}
+                        className={`cell-clickable-filter ${isCreatorFiltered ? 'cell-active-filter' : ''}`}
+                        title={isCreatorFiltered ? "Кликните для сброса поиска по этому создателю" : "Кликните для поиска по этому создателю"}
+                        onClick={() => handleSearchClick(refund.requested_by)}
                       >
                         <div style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>{refund.requested_by}</span>
@@ -1484,11 +1601,11 @@ export default function App() {
                         )}
                       </td>
                       <td 
-                        style={{ cursor: 'pointer' }} 
-                        title="Кликните для фильтрации по статусу" 
-                        onClick={() => { setStatusFilter(refund.status); setPage(1); }}
+                        style={{ cursor: 'pointer' }}
+                        title={isStatusFiltered ? "Кликните для сброса фильтра по статусу" : "Кликните для фильтрации по статусу"}
+                        onClick={() => handleStatusClick(refund.status)}
                       >
-                        <span className={`badge badge-status ${getStatusBadgeClass(refund.status)}`}>
+                        <span className={`badge badge-status ${getStatusBadgeClass(refund.status)} ${isStatusFiltered ? 'badge-active-filter' : ''}`}>
                           {refund.status}
                         </span>
                       </td>

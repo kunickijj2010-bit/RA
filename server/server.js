@@ -264,9 +264,27 @@ app.get('/api/refunds', authenticateToken, async (req, res) => {
 
     query = applyFilters(query, req);
 
+    // Dynamic sorting
+    const allowedSortFields = [
+      'ticket_number',
+      'system_type',
+      'bsp_request_number',
+      'tch_request_number',
+      'request_date',
+      'amount',
+      'agent_refund_equivalent',
+      'agent_name',
+      'requested_by',
+      'status',
+      'updated_at'
+    ];
+    const sortBy = allowedSortFields.includes(req.query.sort_by) ? req.query.sort_by : 'updated_at';
+    const sortDir = req.query.sort_dir === 'asc' ? 'asc' : 'desc';
+    const ascending = sortDir === 'asc';
+
     // Order and paginate
     query = query
-      .order('updated_at', { ascending: false })
+      .order(sortBy, { ascending })
       .range(offset, offset + limit - 1);
 
     const { data, error, count } = await query;

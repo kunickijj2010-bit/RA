@@ -827,3 +827,57 @@ h1, h2, h3, h4, h5, h6 {
   50% { opacity: 0.7; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+/* Active filter styles and interactive elements */
+.badge-active-filter {
+  box-shadow: 0 0 0 2px var(--primary-color), 0 0 10px rgba(99, 102, 241, 0.4) !important;
+  transform: scale(1.05);
+  transition: all 0.2s ease;
+}
+
+.cell-active-filter {
+  background-color: rgba(99, 102, 241, 0.08) !important;
+  font-weight: 600;
+}
+
+[data-theme="light"] .cell-active-filter {
+  background-color: rgba(99, 102, 241, 0.05) !important;
+}
+
+.badge-system:hover,
+.badge-validator:hover,
+.badge-status:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.cell-clickable-filter {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cell-clickable-filter:hover {
+  color: var(--primary-color) !important;
+  background-color: rgba(99, 102, 241, 0.04) !important;
+}
+
+[data-theme="light"] .cell-clickable-filter:hover {
+  background-color: rgba(99, 102, 241, 0.02) !important;
+}
+
+.refunds-table th.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.refunds-table th.sortable-th:hover {
+  background-color: rgba(99, 102, 241, 0.08) !important;
+  color: var(--primary-color) !important;
+}
+
+[data-theme="light"] .refunds-table th.sortable-th:hover {
+  background-color: rgba(99, 102, 241, 0.04) !important;
+}
