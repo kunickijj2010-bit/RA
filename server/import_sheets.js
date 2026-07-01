@@ -3,7 +3,6 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { db } = require('./database');
 
-const HTML_FILE_PATH = path.join(__dirname, '..', '..', 'sheet_page.html');
 
 // Helper to transliterate Russian characters to Latin
 function transliterate(str) {
@@ -270,10 +269,6 @@ async function run() {
   const dryRun = process.argv.includes('--dry-run');
   console.log(`🚀 Starting Google Sheets Migration (${dryRun ? 'DRY RUN - SIMULATION' : 'REAL RUN'})`);
 
-  if (!fs.existsSync(HTML_FILE_PATH)) {
-    throw new Error(`❌ HTML File not found at: ${HTML_FILE_PATH}`);
-  }
-
   // 1. Fetch active validators from database
   console.log("Fetching validators from database...");
   const { data: dbValidators, error: valErr } = await db.from('validators').select('*');
@@ -282,13 +277,24 @@ async function run() {
   }
   console.log(`Found ${dbValidators.length} validators in database.`);
 
-  // 2. Parse sheet titles and GIDs from HTML
-  const html = fs.readFileSync(HTML_FILE_PATH, 'utf8');
-  const pattern = /\\?"(\d{8,11})\\?",\s*\[\s*\{\s*\\?"1\\?"\s*:\s*\[\s*\[\s*0\s*,\s*0\s*,\s*\\?"([^"\\]+)\\?"/g;
+  // 2. Fetch live spreadsheet metadata and parse GIDs
+  console.log("Fetching live spreadsheet metadata from Google Sheets...");
+  const spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1vuozEZO8tqXysSmY9dyRk-kPVrEcND-3YiT2g66SGzY/htmlview';
+  let html;
+  try {
+    const res = await fetch(spreadsheetUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    html = await res.text();
+  } catch (err) {
+    throw new Error(`❌ Failed to fetch spreadsheet metadata: ${err.message}`);
+  }
+
+  // Parse GIDs using items.push syntax in Google Sheets htmlview
+  const pattern = /items\.push\(\{\s*name:\s*"([^"]+)",\s*pageUrl:\s*"[^"]+",\s*gid:\s*"(\d+)"/g;
   const mappings = [];
   let match;
   while ((match = pattern.exec(html)) !== null) {
-    mappings.push({ gid: match[1], name: match[2].trim() });
+    mappings.push({ gid: match[2], name: match[1].trim() });
   }
 
   console.log(`Discovered ${mappings.length} tabs in HTML metadata.`);
