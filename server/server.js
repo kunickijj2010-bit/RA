@@ -217,7 +217,16 @@ function applyFilters(query, req) {
     query = query.or(`ticket_number.ilike.${term},bsp_request_number.ilike.${term},tch_request_number.ilike.${term},agent_name.ilike.${term},requested_by.ilike.${term},validator.ilike.${term}`);
   }
 
-  if (status) query = query.eq('status', status);
+  if (status) {
+    if (status.includes(',')) {
+      const statuses = status.split(',').map(s => s.trim()).filter(Boolean);
+      if (statuses.length > 0) {
+        query = query.in('status', statuses);
+      }
+    } else {
+      query = query.eq('status', status);
+    }
+  }
   if (systemType) query = query.eq('system_type', systemType);
   if (validator) query = query.eq('validator', validator);
 

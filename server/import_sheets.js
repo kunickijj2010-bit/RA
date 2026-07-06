@@ -102,24 +102,24 @@ function cleanOperatorName(name) {
     return 'Система';
   }
   
-  if (cleaned.toLowerCase().includes('в случае любого результата')) {
+  if (cleaned.toLowerCase().includes('в случае любого результата') || cleaned.toLowerCase() === 'система' || cleaned.toLowerCase() === 'софи') {
     return 'Система';
-  }
-
-  // Handle specific prefix typo like 'мШляхтун'
-  if (cleaned.startsWith('мШляхтун')) {
-    cleaned = 'Шляхтун';
   }
 
   // Extract first word (which is the last name/фамилия)
   let firstWord = cleaned.split(/[\s,]+/)[0];
   
-  // Strip trailing punctuation
-  firstWord = firstWord.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+  // Strip trailing punctuation and numbers
+  firstWord = firstWord.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()0-9]/g, "");
 
   // Normalize case (Capitalize first letter, lowercase the rest)
   if (firstWord.length > 0) {
     firstWord = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+  }
+
+  // Handle specific typos and prefix merges
+  if (firstWord.startsWith('Iше') || firstWord.startsWith('Ishe')) {
+    firstWord = 'Шеина';
   }
 
   // Canonical typo mappings
@@ -132,15 +132,48 @@ function cleanOperatorName(name) {
     'Эрикнбекова': 'Эркинбекова',
     'Ульяова': 'Ульянова',
     'Шена': 'Шеина',
+    'Шеин': 'Шеина',
     'Торпкина': 'Торопкина',
     'Захорова': 'Захарова',
     'Мшляхтун': 'Шляхтун',
     'Рябых': 'Рябых',
     'Федоров': 'Федоров',
+    'Дорошеко': 'Дорошенко',
+    'Лукашвеав': 'Лукашева',
+    'Лукащева': 'Лукашева',
+    'Лукашова': 'Лукашева',
+    'Костна': 'Костина',
+    'Косьтина': 'Костина',
+    'Костинна': 'Костина',
+    'Косстина': 'Костина',
+    'Кстина': 'Костина',
+    'Кеостина': 'Костина',
+    'Котсина': 'Косина',
+    'Котстина': 'Косина',
+    'Котстиан': 'Косина',
+    'Котиан': 'Котина',
+    'Подалетнева': 'Подплетнева',
+    'Подпленева': 'Подплетнева',
+    'Подплетева': 'Подплетнева',
+    'Подплнтнева': 'Подплетнева',
+    'Подплтенева': 'Подплетнева',
+    'Горьачева': 'Горбачева',
+    'Каржева': 'Коржева',
+    'Кложева': 'Коржева',
+    'Коржевап': 'Коржева',
+    'Коржеванаталья': 'Коржева',
+    'Vмилова': 'Милова',
+    'Ikшляхтун': 'Шляхтун',
   };
 
   if (typoMap[firstWord]) {
     return typoMap[firstWord];
+  }
+
+  // Filter out status words and verbs
+  const invalidNames = ['Авторизован', 'Возвращаем', 'Отказ', 'Перезапросили', 'Отправлено', 'Skypicker', 'Кова'];
+  if (invalidNames.includes(firstWord)) {
+    return 'Система';
   }
 
   return firstWord;
@@ -582,8 +615,11 @@ async function run() {
         const rawEquiv = colEquivalent !== -1 ? row[colEquivalent] : '';
         const agentRefundEquivalent = parseEquivalent(rawEquiv);
 
-        // Check if row is hidden (archived) in Google Sheets
-        const isArchived = visibleRows ? !visibleRows.has(rIdx) : false;
+        // Check if row is hidden (archived) in Google Sheets or older than May 2024
+        let isArchived = visibleRows ? !visibleRows.has(rIdx) : false;
+        if (requestDate < '2024-05-01') {
+          isArchived = true;
+        }
 
         const refundApplication = {
           ticket_number: ticketNum,

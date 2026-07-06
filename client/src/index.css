@@ -592,6 +592,7 @@ h1, h2, h3, h4, h5, h6 {
 .actions-cell {
   display: flex;
   gap: 0.5rem;
+  justify-content: center;
 }
 
 .btn-icon {
@@ -880,4 +881,80 @@ h1, h2, h3, h4, h5, h6 {
 
 [data-theme="light"] .refunds-table th.sortable-th:hover {
   background-color: rgba(99, 102, 241, 0.04) !important;
+}
+
+/* Custom Multi-Select Dropdown */
+.custom-multiselect {
+  position: relative;
+  width: 100%;
+}
+
+.custom-multiselect-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  height: 42px;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.custom-multiselect-trigger:hover {
+  border-color: var(--accent-color);
+}
+
+.custom-multiselect-trigger .arrow {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.custom-multiselect-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 150;
+  box-shadow: var(--box-shadow-lg);
+  padding: 0.5rem;
+}
+
+.dropdown-option, .dropdown-option-all {
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+
+.dropdown-option:hover, .dropdown-option-all:hover {
+  background: var(--bg-hover);
+}
+
+.dropdown-option label, .dropdown-option-all label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+}
+
+.dropdown-option input[type="checkbox"], .dropdown-option-all input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent-color);
+  width: 16px;
+  height: 16px;
 }

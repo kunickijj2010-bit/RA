@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -161,7 +161,7 @@ export default function App() {
 
   // Filters State
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState([]);
   const [systemFilter, setSystemFilter] = useState('');
   const [validatorFilter, setValidatorFilter] = useState('');
   const [dateStart, setDateStart] = useState('');
@@ -195,6 +195,18 @@ export default function App() {
   const [newValidatorCode, setNewValidatorCode] = useState('');
   const [newValidatorSystem, setNewValidatorSystem] = useState('BSP Link');
   const [validatorError, setValidatorError] = useState('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const statusDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+        setShowStatusDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const [settingsForm, setSettingsForm] = useState({
     smtp_host: '',
@@ -288,7 +300,7 @@ export default function App() {
       fetchRefunds();
       fetchStats();
     }
-  }, [token, page, search, statusFilter, systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter, archiveFilter, sortBy, sortDir]);
+  }, [token, page, search, statusFilter.join(','), systemFilter, validatorFilter, dateStart, dateEnd, onlyWarningsFilter, onlyPendingFilter, onlyMineFilter, archiveFilter, sortBy, sortDir]);
 
   useEffect(() => {
     if (token) {
@@ -374,7 +386,7 @@ export default function App() {
         page,
         limit,
         search,
-        status: statusFilter,
+        status: statusFilter.join(','),
         system_type: systemFilter,
         validator: validatorFilter,
         date_start: dateStart,
@@ -402,7 +414,7 @@ export default function App() {
     try {
       const query = new URLSearchParams({
         search,
-        status: statusFilter,
+        status: statusFilter.join(','),
         system_type: systemFilter,
         validator: validatorFilter,
         date_start: dateStart,
@@ -712,14 +724,14 @@ export default function App() {
 
   const toggleWarningsFilter = () => {
     setOnlyPendingFilter(false);
-    setStatusFilter('');
+    setStatusFilter([]);
     setOnlyWarningsFilter(!onlyWarningsFilter);
     setPage(1);
   };
 
   const togglePendingFilter = () => {
     setOnlyWarningsFilter(false);
-    setStatusFilter('');
+    setStatusFilter([]);
     setOnlyPendingFilter(!onlyPendingFilter);
     setPage(1);
   };
@@ -759,10 +771,10 @@ export default function App() {
   };
 
   const handleStatusClick = (status) => {
-    if (statusFilter === status) {
-      setStatusFilter('');
+    if (statusFilter.includes(status)) {
+      setStatusFilter(statusFilter.filter(s => s !== status));
     } else {
-      setStatusFilter(status);
+      setStatusFilter([...statusFilter, status]);
     }
     setPage(1);
   };
@@ -817,7 +829,7 @@ export default function App() {
 
   const clearFilters = () => {
     setSearch('');
-    setStatusFilter('');
+    setStatusFilter([]);
     setSystemFilter('');
     setValidatorFilter('');
     setDateStart('');
@@ -1378,10 +1390,55 @@ export default function App() {
 
           <div className="filter-group">
             <label>Статус</label>
-            <select className="select-field" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
-              <option value="">Все статусы</option>
-              {STATUSES.map(st => <option key={st} value={st}>{st}</option>)}
-            </select>
+            <div className="custom-multiselect" ref={statusDropdownRef}>
+              <button 
+                type="button" 
+                className="custom-multiselect-trigger" 
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              >
+                {statusFilter.length === 0 ? "Все статусы" : `Выбрано: ${statusFilter.length}`}
+                <span className="arrow">▼</span>
+              </button>
+              {showStatusDropdown && (
+                <div className="custom-multiselect-dropdown">
+                  <div className="dropdown-option-all">
+                    <label>
+                      <input 
+                        type="checkbox" 
+                        checked={statusFilter.length === 0} 
+                        onChange={() => {
+                          setStatusFilter([]);
+                          setPage(1);
+                        }} 
+                      />
+                      Все статусы
+                    </label>
+                  </div>
+                  {STATUSES.map(st => {
+                    const isChecked = statusFilter.includes(st);
+                    return (
+                      <div key={st} className="dropdown-option">
+                        <label>
+                          <input 
+                            type="checkbox" 
+                            checked={isChecked} 
+                            onChange={() => {
+                              if (isChecked) {
+                                setStatusFilter(statusFilter.filter(s => s !== st));
+                              } else {
+                                setStatusFilter([...statusFilter, st]);
+                              }
+                              setPage(1);
+                            }} 
+                          />
+                          {st}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="filter-group">
@@ -1487,7 +1544,7 @@ export default function App() {
                 {renderHeader('Агент получатель', 'agent_name')}
                 {renderHeader('Создал', 'requested_by')}
                 {renderHeader('Статус', 'status')}
-                <th>Действия</th>
+                <th style={{ width: '160px', minWidth: '160px', textAlign: 'center' }}>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -1509,7 +1566,7 @@ export default function App() {
                   const isValidatorFiltered = validatorFilter === refund.validator;
                   const isAgentFiltered = search === refund.agent_name;
                   const isCreatorFiltered = search === refund.requested_by;
-                  const isStatusFiltered = statusFilter === refund.status;
+                  const isStatusFiltered = statusFilter.includes(refund.status);
 
                   return (
                     <tr key={refund.id} className={isWarning ? 'warning-row' : ''}>
@@ -1640,7 +1697,7 @@ export default function App() {
                           {refund.status}
                         </span>
                       </td>
-                      <td>
+                      <td style={{ width: '160px', minWidth: '160px' }}>
                         <div className="actions-cell">
                           <button 
                             className="btn-icon" 
