@@ -392,7 +392,7 @@ async function run() {
     throw new Error("❌ Failed to fetch users: " + usersErr.message);
   }
   const existingUsernames = new Set(dbUsers.map(u => u.username));
-  const existingFullNames = new Set(dbUsers.map(u => u.full_name));
+  const existingFullNames = new Set(dbUsers.map(u => cleanOperatorName(u.full_name)));
 
   const newOperators = new Set();
   const rawApplications = [];
@@ -907,5 +907,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  run
+  run,
+  cleanOperatorName
 };

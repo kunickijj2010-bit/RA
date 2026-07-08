@@ -1480,7 +1480,7 @@ export default function App() {
             </select>
           </div>
 
-          <div className="filter-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.6rem' }}>
+          <div className="filter-group checkbox-filter-group">
             <input 
               type="checkbox" 
               id="onlyMineFilter"
@@ -1493,7 +1493,7 @@ export default function App() {
             </label>
           </div>
 
-          <div className="filters-actions" style={{ marginTop: '1.6rem' }}>
+          <div className="filters-actions">
             <button className="btn btn-secondary" onClick={clearFilters}>Сбросить</button>
           </div>
         </div>
@@ -1828,7 +1828,7 @@ export default function App() {
       {/* CREATE REFUND MODAL */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content modal-md">
             <div className="modal-header">
               <h2>Создать заявку на возврат</h2>
               <button className="btn-icon" onClick={() => { setShowAddModal(false); setFormErrors({}); }}>
@@ -2045,7 +2045,7 @@ export default function App() {
       {/* EDIT REFUND MODAL */}
       {showEditModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content modal-md">
             <div className="modal-header">
               <h2>Редактировать заявку на возврат</h2>
               <button className="btn-icon" onClick={() => { setShowEditModal(false); setFormErrors({}); }}>
@@ -2262,7 +2262,7 @@ export default function App() {
       {/* UPDATE STATUS MODAL */}
       {showStatusModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
+          <div className="modal-content modal-md">
             <div className="modal-header">
               <h2>Изменить статус запроса</h2>
               <button className="btn-icon" onClick={() => setShowStatusModal(false)}>
@@ -2340,7 +2340,7 @@ export default function App() {
       {/* ADMIN LOGIN MODAL */}
       {showLoginModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+          <div className="modal-content modal-sm">
             <div className="modal-header">
               <h2>Панель администратора</h2>
               <button className="btn-icon" onClick={() => { setShowLoginModal(false); setAdminPassword(''); setLoginError(''); }}>
@@ -2376,7 +2376,7 @@ export default function App() {
       {/* CONFIGURATION / SETTINGS MODAL (WITH TABS FOR INTEGRATION AND VALIDATORS) */}
       {showSettingsModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '750px' }}>
+          <div className={`modal-content ${settingsTab === 'employees' ? 'modal-xl' : 'modal-lg'}`}>
             <div className="modal-header">
               <h2>Настройка интеграций и справочников</h2>
               <button className="btn-icon" onClick={() => setShowSettingsModal(false)}>
@@ -2713,7 +2713,7 @@ export default function App() {
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{editingEmployeeId ? 'Редактировать сотрудника' : 'Добавить сотрудника'}</h3>
                       {employeeFormError && <div className="field-error" style={{ background: 'var(--warning-bg)', padding: '0.5rem', borderRadius: '4px' }}>{employeeFormError}</div>}
                       
-                      <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', display: 'grid' }}>
+                      <div className="form-grid">
                         <div>
                           <label>Логин *</label>
                           <input 
@@ -2877,7 +2877,7 @@ export default function App() {
       {/* HISTORY / AUDIT MODAL */}
       {showHistoryModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '550px' }}>
+          <div className="modal-content modal-md">
             <div className="modal-header">
               <h2>Журнал изменений и аудита</h2>
               <button className="btn-icon" onClick={() => setShowHistoryModal(false)}>

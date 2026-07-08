@@ -684,13 +684,18 @@ h1, h2, h3, h4, h5, h6 {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
-  width: 100%;
+  width: 95%;
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--box-shadow-md);
   animation: slideUp var(--transition-normal) ease-out;
 }
+
+.modal-content.modal-sm { max-width: 450px; }
+.modal-content.modal-md { max-width: 700px; }
+.modal-content.modal-lg { max-width: 950px; }
+.modal-content.modal-xl { max-width: 1200px; }
 
 .modal-header {
   padding: 1.5rem;
@@ -957,4 +962,69 @@ h1, h2, h3, h4, h5, h6 {
   accent-color: var(--accent-color);
   width: 16px;
   height: 16px;
+}
+
+/* Custom Checkbox Filter Group */
+.checkbox-filter-group {
+  display: flex;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.6rem;
+}
+
+/* Media Queries for Adaptability */
+@media (max-width: 1024px) {
+  .app-container {
+    padding: 1.25rem;
+  }
+  .modal-content.modal-xl {
+    max-width: 95%;
+  }
+  .modal-content.modal-lg {
+    max-width: 90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: 98% !important;
+    max-height: 95vh;
+  }
+  
+  .modal-body {
+    padding: 1.25rem 1rem;
+  }
+  
+  .modal-header, .modal-footer {
+    padding: 1rem;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem;
+  }
+  
+  .form-grid .full-width {
+    grid-column: span 1 !important;
+  }
+  
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .checkbox-filter-group {
+    margin-top: 0.5rem;
+  }
+  
+  .filters-actions {
+    margin-top: 1rem;
+    justify-content: flex-end;
+  }
+  
+  .table-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
 }

@@ -6,6 +6,28 @@ const { getSettings } = require('./settings_manager');
 
 const LOG_FILE = path.join(__dirname, 'notifications_log.txt');
 
+// Helper to write notification logs to the database (fails gracefully if table is not migrated yet)
+async function logNotificationToDb({ ticketNumber, recipient, channel, status, errorMessage }) {
+  try {
+    const { error } = await db
+      .from('notification_logs')
+      .insert([
+        {
+          ticket_number: ticketNumber || '0',
+          recipient: recipient || 'Unknown',
+          channel,
+          status,
+          error_message: errorMessage || null
+        }
+      ]);
+    if (error) {
+      console.warn("⚠️ [DbNotifyLogWarning] Could not write notify log (table might not exist yet):", error.message);
+    }
+  } catch (err) {
+    console.warn("⚠️ [DbNotifyLogWarning] DB log insert error:", err.message);
+  }
+}
+
 // Helper to write notifications to a log file when SMTP/RC is not configured
 function logNotificationToFile(type, details) {
   const logMessage = `[${new Date().toISOString()}] [${type.toUpperCase()}]
@@ -16,11 +38,12 @@ Details: ${JSON.stringify(details, null, 2)}
 }
 
 // 1. Send Email Notification
-async function sendEmailNotification(to, subject, htmlBody, customSettings) {
+async function sendEmailNotification(to, subject, htmlBody, customSettings, ticketNumber = '0') {
   const config = customSettings || await getSettings();
 
   if (!config.smtp_host || !config.smtp_user) {
     logNotificationToFile('email', { to, subject, body: htmlBody.replace(/<[^>]*>/g, '') });
+    await logNotificationToDb({ ticketNumber, recipient: to, channel: 'email', status: 'mocked' });
     return { success: true, mocked: true };
   }
 
@@ -43,16 +66,18 @@ async function sendEmailNotification(to, subject, htmlBody, customSettings) {
     });
 
     console.log(`✉️ Email notification sent: ${info.messageId}`);
+    await logNotificationToDb({ ticketNumber, recipient: to, channel: 'email', status: 'sent' });
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending email notification:', error);
     logNotificationToFile('email-error', { error: error.message, to, subject });
+    await logNotificationToDb({ ticketNumber, recipient: to, channel: 'email', status: 'failed', errorMessage: error.message });
     throw error;
   }
 }
 
 // 2. Send Rocket Chat Notification
-async function sendRocketChatNotification(message, recipient, customSettings) {
+async function sendRocketChatNotification(message, recipient, customSettings, ticketNumber = '0') {
   const config = customSettings || await getSettings();
   const rcUrl = config.rocketchat_url;
   const rcToken = config.rocketchat_token;
@@ -66,6 +91,7 @@ async function sendRocketChatNotification(message, recipient, customSettings) {
 
   if (!rcUrl) {
     logNotificationToFile('rocket_chat', { channel: rcChannel, message });
+    await logNotificationToDb({ ticketNumber, recipient: rcChannel, channel: 'rocketchat', status: 'mocked' });
     return { success: true, mocked: true };
   }
 
@@ -88,6 +114,7 @@ async function sendRocketChatNotification(message, recipient, customSettings) {
       }
       
       console.log(`💬 Rocket Chat notification sent via Webhook to channel ${rcChannel}`);
+      await logNotificationToDb({ ticketNumber, recipient: rcChannel, channel: 'rocketchat', status: 'sent' });
       return { success: true };
     } else {
       // REST API Integration
@@ -111,11 +138,13 @@ async function sendRocketChatNotification(message, recipient, customSettings) {
       }
 
       console.log(`💬 Rocket Chat notification sent via REST API to ${rcChannel}`);
+      await logNotificationToDb({ ticketNumber, recipient: rcChannel, channel: 'rocketchat', status: 'sent' });
       return { success: true };
     }
   } catch (error) {
     console.error('❌ Error sending Rocket Chat notification:', error);
     logNotificationToFile('rocketchat-error', { error: error.message, message, recipient: rcChannel });
+    await logNotificationToDb({ ticketNumber, recipient: rcChannel, channel: 'rocketchat', status: 'failed', errorMessage: error.message });
     throw error;
   }
 }
@@ -139,9 +168,11 @@ async function addInAppNotification(recipient, ticketNumber, message) {
       throw error;
     }
     console.log(`🔔 In-app notification added for operator: ${recipient}`);
+    await logNotificationToDb({ ticketNumber, recipient, channel: 'inapp', status: 'sent' });
     return data[0]?.id;
   } catch (err) {
     console.error('❌ Error saving in-app notification:', err);
+    await logNotificationToDb({ ticketNumber, recipient, channel: 'inapp', status: 'failed', errorMessage: err.message });
     throw err;
   }
 }
@@ -206,9 +237,9 @@ async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedB
 
   await Promise.all([
     // Email
-    operatorEmail ? sendEmailNotification(operatorEmail, emailSubject, emailHtml).catch(e => console.error("Email notify err ignored:", e.message)) : Promise.resolve(),
+    operatorEmail ? sendEmailNotification(operatorEmail, emailSubject, emailHtml, null, ticketNumber).catch(e => console.error("Email notify err ignored:", e.message)) : Promise.resolve(),
     // Rocket Chat
-    sendRocketChatNotification(rcMessage, operatorRocketChat).catch(e => console.error("RC notify err:", e.message)),
+    sendRocketChatNotification(rcMessage, operatorRocketChat, null, ticketNumber).catch(e => console.error("RC notify err:", e.message)),
     // In-app Bell
     operatorName ? addInAppNotification(operatorName, ticketNumber, inAppMessage).catch(e => console.error("InApp notify err:", e.message)) : Promise.resolve()
   ]);
@@ -238,8 +269,8 @@ async function notifyInactivity({ ticketNumber, daysInactive, operatorEmail, ope
   const inAppMessage = `Внимание! Нет изменений статуса более ${daysInactive} дней! (${amount} ${currency})`;
 
   await Promise.all([
-    operatorEmail ? sendEmailNotification(operatorEmail, emailSubject, emailHtml).catch(e => console.error("Email warn err:", e.message)) : Promise.resolve(),
-    sendRocketChatNotification(rcMessage, operatorRocketChat).catch(e => console.error("RC warn err:", e.message)),
+    operatorEmail ? sendEmailNotification(operatorEmail, emailSubject, emailHtml, null, ticketNumber).catch(e => console.error("Email warn err:", e.message)) : Promise.resolve(),
+    sendRocketChatNotification(rcMessage, operatorRocketChat, null, ticketNumber).catch(e => console.error("RC warn err:", e.message)),
     operatorName ? addInAppNotification(operatorName, ticketNumber, inAppMessage).catch(e => console.error("InApp warn err:", e.message)) : Promise.resolve()
   ]);
 }

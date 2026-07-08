@@ -9,7 +9,7 @@ const { notifyStatusChange, syncToGoogleSheets } = require('./notifications');
 const { getSettings, saveSettings } = require('./settings_manager');
 const bcrypt = require('bcryptjs');
 const { generateToken, authenticateToken, requireAdmin } = require('./auth');
-const { run: runImport } = require('./import_sheets');
+const { run: runImport, cleanOperatorName } = require('./import_sheets');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -111,7 +111,7 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
         {
           username: username.toLowerCase().trim(),
           password_hash,
-          full_name,
+          full_name: cleanOperatorName(full_name),
           email: email || null,
           rocketchat_username: rocketchat_username || null,
           role
@@ -145,7 +145,7 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const updateData = {
       username: username.toLowerCase().trim(),
-      full_name,
+      full_name: cleanOperatorName(full_name),
       email: email || null,
       rocketchat_username: rocketchat_username || null,
       role,
