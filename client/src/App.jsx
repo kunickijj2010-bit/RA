@@ -227,6 +227,12 @@ export default function App() {
 
   // User Management State
   const [employees, setEmployees] = useState([]);
+  
+  // Notification Logs State
+  const [notifLogs, setNotifLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [logsOffset, setLogsOffset] = useState(0);
+  const [totalLogs, setTotalLogs] = useState(0);
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
   const [employeeFormError, setEmployeeFormError] = useState('');
@@ -346,6 +352,12 @@ export default function App() {
   useEffect(() => {
     if (showSettingsModal && settingsTab === 'employees') {
       fetchEmployees();
+    }
+  }, [showSettingsModal, settingsTab]);
+
+  useEffect(() => {
+    if (showSettingsModal && settingsTab === 'logs') {
+      fetchNotifLogs(true);
     }
   }, [showSettingsModal, settingsTab]);
 
@@ -970,6 +982,75 @@ export default function App() {
       }
     } catch (err) {
       console.error("Error deleting validator:", err);
+    }
+  };
+
+  // Notification Logs Actions
+  const fetchNotifLogs = async (reset = false) => {
+    setLoadingLogs(true);
+    const limit = 50;
+    const currentOffset = reset ? 0 : logsOffset;
+    try {
+      const res = await apiFetch(`/notification-logs?limit=${limit}&offset=${currentOffset}`);
+      const data = await res.json();
+      if (res.ok) {
+        if (reset) {
+          setNotifLogs(data.logs);
+          setLogsOffset(limit);
+        } else {
+          setNotifLogs(prev => [...prev, ...data.logs]);
+          setLogsOffset(prev => prev + limit);
+        }
+        setTotalLogs(data.total);
+      }
+    } catch (err) {
+      console.error("Error fetching notification logs:", err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  const loadMoreLogs = () => {
+    fetchNotifLogs(false);
+  };
+
+  const exportLogsToCsv = async () => {
+    try {
+      const res = await apiFetch('/notification-logs?all=true');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch logs for export');
+      
+      const logs = data.logs || [];
+      if (logs.length === 0) return;
+
+      // Generate CSV
+      const headers = ['ID', 'Дата', 'Билет', 'Канал', 'Получатель', 'Статус', 'Ошибка/Детали'];
+      const csvRows = [headers.join(',')];
+
+      for (const log of logs) {
+        const row = [
+          log.id,
+          new Date(log.created_at).toLocaleString('ru-RU').replace(/"/g, '""'),
+          `"${log.ticket_number}"`,
+          `"${log.channel}"`,
+          `"${log.recipient}"`,
+          `"${log.status}"`,
+          `"${(log.error_message || '').replace(/"/g, '""')}"`
+        ];
+        csvRows.push(row.join(','));
+      }
+
+      const csvContent = '\uFEFF' + csvRows.join('\n'); // Add UTF-8 BOM for Excel compatibility
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `notification_logs_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert("Ошибка при экспорте логов: " + err.message);
     }
   };
 
@@ -2441,6 +2522,22 @@ export default function App() {
               >
                 👥 Сотрудники
               </button>
+              <button 
+                type="button"
+                onClick={() => setSettingsTab('logs')}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  border: 'none',
+                  borderBottom: settingsTab === 'logs' ? '2px solid var(--accent-color)' : '2px solid transparent',
+                  background: 'none',
+                  color: settingsTab === 'logs' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.875rem'
+                }}
+              >
+                📋 Журнал уведомлений
+              </button>
             </div>
 
             {/* TAB CONTENT: INTEGRATION */}
@@ -2864,6 +2961,112 @@ export default function App() {
                     </div>
                   )}
                   
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowSettingsModal(false)}>Закрыть</button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: NOTIFICATION LOGS */}
+            {settingsTab === 'logs' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                      Журнал всех отправленных Email, Rocket.Chat и внутрисистемных оповещений.
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                      <button type="button" className="btn btn-secondary" onClick={exportLogsToCsv} disabled={notifLogs.length === 0}>
+                        📥 Экспорт в CSV
+                      </button>
+                      <button type="button" className="btn btn-primary" onClick={() => fetchNotifLogs(true)}>
+                        🔄 Обновить
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="table-wrapper">
+                    <table className="refunds-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--border-color)' }}>
+                          <th style={{ padding: '0.75rem', minWidth: '150px' }}>Дата и время</th>
+                          <th style={{ padding: '0.75rem' }}>Билет</th>
+                          <th style={{ padding: '0.75rem' }}>Канал</th>
+                          <th style={{ padding: '0.75rem' }}>Получатель</th>
+                          <th style={{ padding: '0.75rem' }}>Статус</th>
+                          <th style={{ padding: '0.75rem', minWidth: '200px' }}>Детали / Ошибка</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notifLogs.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                              {loadingLogs ? 'Загрузка логов...' : 'Логи уведомлений пока отсутствуют.'}
+                            </td>
+                          </tr>
+                        ) : (
+                          notifLogs.map(log => {
+                            let statusColor = '#34d399';
+                            let statusBg = 'rgba(16, 185, 129, 0.15)';
+                            let statusBorder = '1px solid rgba(16, 185, 129, 0.3)';
+                            let statusText = 'Отправлено';
+
+                            if (log.status === 'mocked') {
+                              statusColor = '#60a5fa';
+                              statusBg = 'rgba(96, 165, 250, 0.15)';
+                              statusBorder = '1px solid rgba(96, 165, 250, 0.3)';
+                              statusText = 'Имитация';
+                            } else if (log.status === 'failed') {
+                              statusColor = '#f87171';
+                              statusBg = 'rgba(239, 68, 68, 0.15)';
+                              statusBorder = '1px solid rgba(239, 68, 68, 0.3)';
+                              statusText = 'Ошибка';
+                            }
+
+                            return (
+                              <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                                <td style={{ padding: '0.75rem' }}>
+                                  {new Date(log.created_at).toLocaleString('ru-RU')}
+                                </td>
+                                <td style={{ padding: '0.75rem' }}>
+                                  <strong style={{ color: 'var(--accent-color)' }}>{log.ticket_number}</strong>
+                                </td>
+                                <td style={{ padding: '0.75rem', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                  {log.channel === 'rocketchat' ? 'Rocket Chat' : log.channel}
+                                </td>
+                                <td style={{ padding: '0.75rem' }}>{log.recipient}</td>
+                                <td style={{ padding: '0.75rem' }}>
+                                  <span style={{
+                                    padding: '0.2rem 0.4rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    color: statusColor,
+                                    background: statusBg,
+                                    border: statusBorder
+                                  }}>
+                                    {statusText}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '0.75rem', color: log.status === 'failed' ? '#f87171' : 'var(--text-secondary)' }}>
+                                  {log.error_message || '—'}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {notifLogs.length < totalLogs && (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                      <button type="button" className="btn btn-secondary" onClick={loadMoreLogs} disabled={loadingLogs}>
+                        {loadingLogs ? 'Загрузка...' : 'Загрузить еще'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setShowSettingsModal(false)}>Закрыть</button>

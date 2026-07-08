@@ -831,6 +831,38 @@ app.get('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
   res.json(masked);
 });
 
+// GET /api/notification-logs - Retrieve system notification logs (Admin only)
+app.get('/api/notification-logs', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit || '50');
+    const offset = parseInt(req.query.offset || '0');
+    const fetchAll = req.query.all === 'true';
+
+    let query = db
+      .from('notification_logs')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    if (!fetchAll) {
+      query = query.range(offset, offset + limit - 1);
+    }
+
+    const { data, count, error } = await query;
+
+    if (error) {
+      if (error.code === 'PGRST116' || error.message.includes('relation') || error.message.includes('does not exist')) {
+        return res.json({ logs: [], total: 0 });
+      }
+      throw error;
+    }
+
+    res.json({ logs: data || [], total: count || 0 });
+  } catch (err) {
+    console.error("Error fetching notification logs:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 9. PUT /api/settings - Update settings
 app.put('/api/settings', authenticateToken, requireAdmin, async (req, res) => {
   const success = await saveSettings(req.body);
