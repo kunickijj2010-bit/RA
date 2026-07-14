@@ -1625,7 +1625,7 @@ export default function App() {
                 {renderHeader('Агент получатель', 'agent_name')}
                 {renderHeader('Создал', 'requested_by')}
                 {renderHeader('Статус', 'status')}
-                <th style={{ width: '160px', minWidth: '160px', textAlign: 'center' }}>Действия</th>
+                <th style={{ textAlign: 'center' }}>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -1778,7 +1778,7 @@ export default function App() {
                           {refund.status}
                         </span>
                       </td>
-                      <td style={{ width: '160px', minWidth: '160px' }}>
+                      <td>
                         <div className="actions-cell">
                           <button 
                             className="btn-icon" 
