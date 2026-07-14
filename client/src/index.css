@@ -973,58 +973,249 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 1.6rem;
 }
 
-/* Media Queries for Adaptability */
-@media (max-width: 1024px) {
+/* ====================================================
+   RESPONSIVE MEDIA QUERIES — Laptop & Smaller Screens
+   ==================================================== */
+
+/* --- LARGE LAPTOPS (1440px and below) --- */
+@media (max-width: 1440px) {
   .app-container {
-    padding: 1.25rem;
+    padding: 1.5rem;
+    max-width: 100%;
   }
-  .modal-content.modal-xl {
-    max-width: 95%;
+
+  .logo-container h1 {
+    font-size: 1.4rem;
   }
-  .modal-content.modal-lg {
-    max-width: 90%;
+
+  .logo-container p {
+    font-size: 0.8rem;
+  }
+
+  /* Reduce table cell padding to fit more columns */
+  .refunds-table th {
+    padding: 0.75rem 0.75rem;
+    font-size: 0.75rem;
+  }
+
+  .refunds-table td {
+    padding: 0.75rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  /* Make action column sticky on horizontal scroll */
+  .refunds-table th:last-child,
+  .refunds-table td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 10;
+    background: var(--bg-secondary);
+    box-shadow: -4px 0 8px -2px rgba(0, 0, 0, 0.3);
+  }
+
+  .refunds-table tbody tr:hover td:last-child {
+    background: var(--bg-hover);
+  }
+
+  .refunds-table tbody tr.warning-row td:last-child {
+    background: rgba(239, 68, 68, 0.03);
+  }
+
+  .refunds-table tbody tr.warning-row:hover td:last-child {
+    background: rgba(239, 68, 68, 0.06);
+  }
+
+  .refunds-table th:last-child {
+    background: rgba(11, 15, 25, 0.95);
   }
 }
 
+/* --- STANDARD LAPTOPS (1280px and below) --- */
+@media (max-width: 1280px) {
+  .app-container {
+    padding: 1.25rem;
+  }
+
+  /* Header: wrap to two rows if needed */
+  .app-header {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .header-actions {
+    gap: 0.75rem;
+  }
+
+  /* Filters: explicit 3-column grid */
+  .filters-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Stats cards: 3 columns */
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+
+  .stat-card {
+    padding: 1.25rem;
+  }
+
+  .stat-value {
+    font-size: 1.75rem;
+  }
+}
+
+/* --- SMALL LAPTOPS (1024px and below) --- */
+@media (max-width: 1024px) {
+  .app-container {
+    padding: 1rem;
+  }
+
+  .modal-content.modal-xl {
+    max-width: 95%;
+  }
+
+  .modal-content.modal-lg {
+    max-width: 90%;
+  }
+
+  /* Header: stack logo and actions vertically */
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .logo-container h1 {
+    font-size: 1.25rem;
+  }
+
+  /* Filters: 2-column grid */
+  .filters-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filters-grid .filter-group.full-width {
+    grid-column: span 2 !important;
+  }
+
+  /* Stats: 2 columns */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Table: even more compact */
+  .refunds-table th {
+    padding: 0.625rem 0.5rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.02em;
+  }
+
+  .refunds-table td {
+    padding: 0.625rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  /* Smaller action buttons */
+  .btn-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .actions-cell {
+    gap: 0.25rem;
+  }
+
+  .table-header-row {
+    padding: 1rem;
+  }
+
+  .table-header-row h2 {
+    font-size: 1.1rem;
+  }
+
+  .pagination-footer {
+    padding: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+}
+
+/* --- TABLETS AND NARROW SCREENS (768px and below) --- */
 @media (max-width: 768px) {
   .modal-content {
     width: 98% !important;
     max-height: 95vh;
   }
-  
+
   .modal-body {
     padding: 1.25rem 1rem;
   }
-  
+
   .modal-header, .modal-footer {
     padding: 1rem;
   }
-  
+
   .form-grid {
     grid-template-columns: 1fr !important;
     gap: 1rem;
   }
-  
+
   .form-grid .full-width {
     grid-column: span 1 !important;
   }
-  
+
   .filters-grid {
     grid-template-columns: 1fr;
   }
-  
+
+  .filters-grid .filter-group.full-width {
+    grid-column: span 1 !important;
+  }
+
   .checkbox-filter-group {
     margin-top: 0.5rem;
   }
-  
+
   .filters-actions {
     margin-top: 1rem;
     justify-content: flex-end;
   }
-  
+
   .table-header-row {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
   }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bell-dropdown {
+    width: 300px;
+    right: -60px;
+  }
+}
+
+/* --- Light theme sticky column overrides --- */
+[data-theme="light"] .refunds-table th:last-child {
+  background: var(--bg-card);
+}
+
+[data-theme="light"] .refunds-table td:last-child {
+  background: var(--bg-secondary);
+}
+
+[data-theme="light"] .refunds-table tbody tr:hover td:last-child {
+  background: var(--bg-hover);
 }
