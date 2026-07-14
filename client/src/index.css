@@ -465,12 +465,13 @@ h1, h2, h3, h4, h5, h6 {
 
 .refunds-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: left;
 }
 
 .refunds-table th {
-  background-color: rgba(11, 15, 25, 0.4);
+  background-color: rgba(11, 15, 25, 0.95);
   color: var(--text-secondary);
   font-weight: 600;
   font-size: 0.8125rem;
@@ -486,22 +487,49 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.875rem;
   color: var(--text-primary);
   vertical-align: middle;
+  background-color: var(--bg-secondary); /* Ensure solid background for sticky overlap */
 }
 
 .refunds-table tbody tr {
   transition: background-color var(--transition-fast);
 }
 
-.refunds-table tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.02);
+.refunds-table tbody tr:hover td {
+  background-color: var(--bg-hover);
 }
 
-.refunds-table tbody tr.warning-row {
-  background-color: rgba(239, 68, 68, 0.03);
+.refunds-table tbody tr.warning-row td {
+  background-color: rgba(239, 68, 68, 0.05);
 }
 
-.refunds-table tbody tr.warning-row:hover {
-  background-color: rgba(239, 68, 68, 0.06);
+.refunds-table tbody tr.warning-row:hover td {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+/* Global Sticky Actions Column */
+.refunds-table th:last-child,
+.refunds-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 10;
+  background-color: var(--bg-secondary);
+  box-shadow: -4px 0 8px -2px rgba(0, 0, 0, 0.35);
+}
+
+.refunds-table th:last-child {
+  background-color: #121824; /* Solid header background */
+}
+
+.refunds-table tbody tr:hover td:last-child {
+  background-color: var(--bg-hover) !important;
+}
+
+.refunds-table tbody tr.warning-row td:last-child {
+  background-color: #241c24 !important; /* Blended warning+secondary background */
+}
+
+.refunds-table tbody tr.warning-row:hover td:last-child {
+  background-color: #2e202e !important;
 }
 
 /* Badges */
@@ -1003,30 +1031,9 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 0.8125rem;
   }
 
-  /* Make action column sticky on horizontal scroll */
-  .refunds-table th:last-child,
-  .refunds-table td:last-child {
-    position: sticky;
-    right: 0;
-    z-index: 10;
-    background: var(--bg-secondary);
-    box-shadow: -4px 0 8px -2px rgba(0, 0, 0, 0.3);
-  }
-
-  .refunds-table tbody tr:hover td:last-child {
-    background: var(--bg-hover);
-  }
-
-  .refunds-table tbody tr.warning-row td:last-child {
-    background: rgba(239, 68, 68, 0.03);
-  }
-
-  .refunds-table tbody tr.warning-row:hover td:last-child {
-    background: rgba(239, 68, 68, 0.06);
-  }
-
-  .refunds-table th:last-child {
-    background: rgba(11, 15, 25, 0.95);
+  /* Wrap filters grid into 3 columns earlier */
+  .filters-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
