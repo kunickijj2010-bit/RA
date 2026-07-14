@@ -536,43 +536,14 @@ h1, h2, h3, h4, h5, h6 {
   background-color: #2e202e !important;
 }
 
-/* Global Sticky Status Column (Second to Last Column) */
-.refunds-table th:nth-last-child(2),
-.refunds-table td:nth-last-child(2) {
-  position: sticky;
-  right: 160px; /* Width of the last column */
-  z-index: 9;
-  background-color: var(--bg-secondary);
-  border-left: 1px solid var(--border-color); /* Separation border */
-}
-
-.refunds-table th:nth-last-child(2) {
-  background-color: #121824;
-}
-
-.refunds-table tbody tr:hover td:nth-last-child(2) {
-  background-color: var(--bg-hover) !important;
-}
-
-.refunds-table tbody tr.warning-row td:nth-last-child(2) {
-  background-color: #241c24 !important;
-}
-
-.refunds-table tbody tr.warning-row:hover td:nth-last-child(2) {
-  background-color: #2e202e !important;
-}
-
-/* Explicit Table Column Widths to Ensure Tight Layout */
-.refunds-table th:nth-child(1), .refunds-table td:nth-child(1) { width: 12%; min-width: 110px; }
-.refunds-table th:nth-child(2), .refunds-table td:nth-child(2) { width: 10%; min-width: 100px; }
-.refunds-table th:nth-child(3), .refunds-table td:nth-child(3) { width: 10%; min-width: 105px; }
-.refunds-table th:nth-child(4), .refunds-table td:nth-child(4) { width: 8%; min-width: 85px; }
-.refunds-table th:nth-child(5), .refunds-table td:nth-child(5) { width: 9%; min-width: 90px; }
-.refunds-table th:nth-child(6), .refunds-table td:nth-child(6) { width: 9%; min-width: 90px; }
-.refunds-table th:nth-child(7), .refunds-table td:nth-child(7) { width: 16%; min-width: 150px; }
-.refunds-table th:nth-child(8), .refunds-table td:nth-child(8) { width: 8%; min-width: 80px; }
-.refunds-table th:nth-child(9), .refunds-table td:nth-child(9) { width: 10%; min-width: 105px; }
-.refunds-table th:nth-child(10), .refunds-table td:nth-child(10) { width: 160px; min-width: 160px; }
+/* Explicit Table Column Widths to Ensure Tight Layout (7 Columns) */
+.refunds-table th:nth-child(1), .refunds-table td:nth-child(1) { width: 14%; min-width: 110px; }
+.refunds-table th:nth-child(2), .refunds-table td:nth-child(2) { width: 18%; min-width: 140px; }
+.refunds-table th:nth-child(3), .refunds-table td:nth-child(3) { width: 16%; min-width: 120px; }
+.refunds-table th:nth-child(4), .refunds-table td:nth-child(4) { width: 16%; min-width: 110px; }
+.refunds-table th:nth-child(5), .refunds-table td:nth-child(5) { width: 22%; min-width: 160px; }
+.refunds-table th:nth-child(6), .refunds-table td:nth-child(6) { width: 14%; min-width: 100px; }
+.refunds-table th:nth-child(7), .refunds-table td:nth-child(7) { width: 140px; min-width: 140px; }
 
 /* Badges */
 .badge {
@@ -1079,14 +1050,9 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Make actions column slightly narrower at this breakpoint */
-  .refunds-table th:nth-child(10), .refunds-table td:nth-child(10) {
-    width: 140px;
-    min-width: 140px;
-  }
-
-  /* Adjust sticky position of the status column to align with the narrower actions column */
-  .refunds-table th:nth-last-child(2), .refunds-table td:nth-last-child(2) {
-    right: 140px;
+  .refunds-table th:nth-child(7), .refunds-table td:nth-child(7) {
+    width: 130px;
+    min-width: 130px;
   }
 }
 
@@ -1210,14 +1176,9 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   /* Make actions column narrow since buttons are smaller */
-  .refunds-table th:nth-child(10), .refunds-table td:nth-child(10) {
-    width: 120px;
-    min-width: 120px;
-  }
-
-  /* Adjust sticky position of the status column at this breakpoint */
-  .refunds-table th:nth-last-child(2), .refunds-table td:nth-last-child(2) {
-    right: 120px;
+  .refunds-table th:nth-child(7), .refunds-table td:nth-child(7) {
+    width: 115px;
+    min-width: 115px;
   }
 }
 

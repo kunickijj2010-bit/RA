@@ -1617,13 +1617,10 @@ export default function App() {
             <thead>
               <tr>
                 {renderHeader('Билет', 'ticket_number')}
-                {renderHeader('Подключение', 'system_type')}
-                {renderHeader('Запрос BSP / TCH', 'bsp_request_number')}
-                {renderHeader('Дата создания', 'request_date')}
-                {renderHeader('Сумма к возврату', 'amount')}
-                {renderHeader('Эквивалент', 'agent_refund_equivalent')}
+                {renderHeader('Подключение / Запрос', 'system_type')}
+                {renderHeader('Создан / Автор', 'request_date')}
+                {renderHeader('Сумма / Эквивалент', 'amount')}
                 {renderHeader('Агент получатель', 'agent_name')}
-                {renderHeader('Создал', 'requested_by')}
                 {renderHeader('Статус', 'status')}
                 <th style={{ textAlign: 'center' }}>Действия</th>
               </tr>
@@ -1631,7 +1628,7 @@ export default function App() {
             <tbody>
               {refunds.length === 0 ? (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                     Заявки не найдены. Измените параметры фильтрации или создайте новую заявку.
                   </td>
                 </tr>
@@ -1665,49 +1662,76 @@ export default function App() {
                         )}
                       </td>
                       <td>
-                        <span 
-                          className={`badge badge-system ${isSystemFiltered ? 'badge-active-filter' : ''}`}
-                          title={isSystemFiltered ? "Кликните для сброса фильтра по подключению" : "Кликните для фильтрации по подключению"}
-                          onClick={() => handleSystemClick(refund.system_type)}
-                        >
-                          {refund.system_type}
-                        </span>
-                        <span 
-                          className={`badge badge-validator ${isValidatorFiltered ? 'badge-active-filter' : ''}`}
-                          style={{ 
-                            marginLeft: '4px',
-                            background: 'rgba(99, 102, 241, 0.12)',
-                            border: '1px solid rgba(99, 102, 241, 0.25)',
-                            color: '#a5b4fc',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                            fontWeight: '500'
-                          }}
-                          title={isValidatorFiltered ? `Кликните для сброса фильтра по валидатору ${refund.validator}` : `Кликните для фильтрации по валидатору ${refund.validator}`}
-                          onClick={() => handleValidatorClick(refund.system_type, refund.validator)}
-                        >
-                          {refund.validator}
-                        </span>
+                        <div>
+                          <span 
+                            className={`badge badge-system ${isSystemFiltered ? 'badge-active-filter' : ''}`}
+                            title={isSystemFiltered ? "Кликните для сброса фильтра по подключению" : "Кликните для фильтрации по подключению"}
+                            onClick={() => handleSystemClick(refund.system_type)}
+                          >
+                            {refund.system_type}
+                          </span>
+                          <span 
+                            className={`badge badge-validator ${isValidatorFiltered ? 'badge-active-filter' : ''}`}
+                            style={{ 
+                              marginLeft: '4px',
+                              background: 'rgba(99, 102, 241, 0.12)',
+                              border: '1px solid rgba(99, 102, 241, 0.25)',
+                              color: '#a5b4fc',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '0.75rem',
+                              fontWeight: '500'
+                            }}
+                            title={isValidatorFiltered ? `Кликните для сброса фильтра по валидатору ${refund.validator}` : `Кликните для фильтрации по валидатору ${refund.validator}`}
+                            onClick={() => handleValidatorClick(refund.system_type, refund.validator)}
+                          >
+                            {refund.validator}
+                          </span>
+                        </div>
                         {refund.refund_type && (
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                             {refund.refund_type}
                           </div>
                         )}
-                      </td>
-                      <td>
-                        <div style={{ fontSize: '0.8125rem' }}>
+                        <div style={{ fontSize: '0.75rem', marginTop: '4px', color: 'var(--text-secondary)' }}>
                           {refund.bsp_request_number && <div>BSP: {refund.bsp_request_number}</div>}
                           {refund.tch_request_number && <div>TCH: {refund.tch_request_number}</div>}
-                          {!refund.bsp_request_number && !refund.tch_request_number && <span style={{ color: 'var(--text-muted)' }}>—</span>}
                         </div>
                       </td>
                       <td 
                         className={`cell-clickable-filter ${isDateFiltered ? 'cell-active-filter' : ''}`}
-                        title={isDateFiltered ? "Кликните для сброса фильтра по дате" : "Кликните для фильтрации по этой дате"}
                         onClick={() => handleDateClick(refund.request_date)}
                       >
-                        {formatDateString(refund.request_date)}
+                        <div>{formatDateString(refund.request_date)}</div>
+                        <div 
+                          style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px', cursor: 'pointer' }}
+                          title={isCreatorFiltered ? "Кликните для сброса поиска по этому создателю" : "Кликните для поиска по этому создателю"}
+                          onClick={(e) => { e.stopPropagation(); handleSearchClick(refund.requested_by); }}
+                        >
+                          <span>{refund.requested_by}</span>
+                          {user && refund.requested_by === user.full_name && (
+                            <span 
+                              style={{ 
+                                fontSize: '0.65rem', 
+                                padding: '0px 4px', 
+                                background: 'rgba(34, 197, 94, 0.15)', 
+                                border: '1px solid rgba(34, 197, 94, 0.3)', 
+                                borderRadius: '3px', 
+                                color: '#4ade80',
+                                fontWeight: 'bold',
+                                marginLeft: '4px'
+                              }}
+                            >
+                              Мой
+                            </span>
+                          )}
+                        </div>
+                        {(refund.operator_email || refund.operator_rocketchat) && (
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            {refund.operator_email && <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '120px' }}>✉️ {refund.operator_email}</div>}
+                            {refund.operator_rocketchat && <div>💬 {refund.operator_rocketchat}</div>}
+                          </div>
+                        )}
                       </td>
                       <td style={{ fontWeight: '500' }}>
                         {isDiscrepancy ? (
@@ -1722,11 +1746,11 @@ export default function App() {
                         ) : (
                           `${refund.amount} ${refund.currency}`
                         )}
-                      </td>
-                      <td>
-                        {refund.agent_refund_equivalent 
-                          ? `${refund.agent_refund_equivalent.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} руб.`
-                          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px', fontWeight: 'normal' }}>
+                          {refund.agent_refund_equivalent 
+                            ? `${refund.agent_refund_equivalent.toLocaleString('ru-RU', { minimumFractionDigits: 2 })} руб.`
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </div>
                       </td>
                       <td 
                         className={`cell-clickable-filter ${isAgentFiltered ? 'cell-active-filter' : ''}`}
@@ -1736,38 +1760,6 @@ export default function App() {
                         <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {refund.agent_name}
                         </div>
-                      </td>
-                      <td 
-                        className={`cell-clickable-filter ${isCreatorFiltered ? 'cell-active-filter' : ''}`}
-                        title={isCreatorFiltered ? "Кликните для сброса поиска по этому создателю" : "Кликните для поиска по этому создателю"}
-                        onClick={() => handleSearchClick(refund.requested_by)}
-                      >
-                        <div style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{refund.requested_by}</span>
-                          {user && refund.requested_by === user.full_name && (
-                            <span 
-                              style={{ 
-                                fontSize: '0.7rem', 
-                                padding: '1px 5px', 
-                                background: 'rgba(34, 197, 94, 0.15)', 
-                                border: '1px solid rgba(34, 197, 94, 0.3)', 
-                                borderRadius: '4px', 
-                                color: '#4ade80',
-                                fontWeight: 'bold',
-                                whiteSpace: 'nowrap'
-                              }}
-                              title="Вы создали этот запрос"
-                            >
-                              Мой
-                            </span>
-                          )}
-                        </div>
-                        {(refund.operator_email || refund.operator_rocketchat) && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {refund.operator_email && <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '120px' }}>✉️ {refund.operator_email}</div>}
-                            {refund.operator_rocketchat && <div>💬 {refund.operator_rocketchat}</div>}
-                          </div>
-                        )}
                       </td>
                       <td 
                         style={{ cursor: 'pointer' }}
