@@ -214,7 +214,23 @@ function applyFilters(query, req) {
 
   if (search) {
     const cleanSearch = search.replace(/"/g, '\\"');
-    query = query.or(`ticket_number.ilike."%${cleanSearch}%",bsp_request_number.ilike."%${cleanSearch}%",tch_request_number.ilike."%${cleanSearch}%",agent_name.ilike."%${cleanSearch}%",requested_by.ilike."%${cleanSearch}%",validator.ilike."%${cleanSearch}%"`);
+    const digitsOnly = search.replace(/\D/g, '');
+    
+    const conditions = [
+      `ticket_number.ilike."%${cleanSearch}%"`,
+      `bsp_request_number.ilike."%${cleanSearch}%"`,
+      `tch_request_number.ilike."%${cleanSearch}%"`,
+      `agent_name.ilike."%${cleanSearch}%"`,
+      `requested_by.ilike."%${cleanSearch}%"`,
+      `validator.ilike."%${cleanSearch}%"`
+    ];
+    
+    // If search term contains digits with dashes/spaces, also search for the clean digit string
+    if (digitsOnly && digitsOnly.length >= 3 && digitsOnly !== cleanSearch) {
+      conditions.push(`ticket_number.ilike."%${digitsOnly}%"`);
+    }
+    
+    query = query.or(conditions.join(','));
   }
 
   if (status) {
