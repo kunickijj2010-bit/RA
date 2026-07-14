@@ -213,8 +213,8 @@ function applyFilters(query, req) {
   }
 
   if (search) {
-    const term = `%${search}%`;
-    query = query.or(`ticket_number.ilike.${term},bsp_request_number.ilike.${term},tch_request_number.ilike.${term},agent_name.ilike.${term},requested_by.ilike.${term},validator.ilike.${term}`);
+    const cleanSearch = search.replace(/"/g, '\\"');
+    query = query.or(`ticket_number.ilike."%${cleanSearch}%",bsp_request_number.ilike."%${cleanSearch}%",tch_request_number.ilike."%${cleanSearch}%",agent_name.ilike."%${cleanSearch}%",requested_by.ilike."%${cleanSearch}%",validator.ilike."%${cleanSearch}%"`);
   }
 
   if (status) {

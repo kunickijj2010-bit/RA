@@ -38,6 +38,15 @@ const formatDateString = (dateStr) => {
     return dateStr;
   }
 };
+const formatTicketNumber = (t) => {
+  if (!t) return '';
+  const clean = t.toString().replace(/\D/g, '');
+  if (clean.length === 13) {
+    return `${clean.slice(0, 3)}-${clean.slice(3)}`;
+  }
+  return t;
+};
+
 const AGENTS = [
   "Emerging Travel Inc. (0CK9)",
   "Alfa Travel LLC (1AB2)",
@@ -1649,7 +1658,7 @@ export default function App() {
                   return (
                     <tr key={refund.id} className={isWarning ? 'warning-row' : ''}>
                       <td style={{ fontWeight: '600' }}>
-                        <div>{refund.ticket_number}</div>
+                        <div>{formatTicketNumber(refund.ticket_number)}</div>
                         {refund.support_ticket && (
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'normal', marginTop: '2px' }}>
                             Тикет: {refund.support_ticket}
@@ -1918,11 +1927,11 @@ export default function App() {
                   <label>Номер билета (13 цифр) *</label>
                   <input 
                     type="text" 
-                    maxLength="13"
+                    maxLength="18"
                     className="input-field" 
                     placeholder="Например: 6339413054870"
                     value={formData.ticket_number}
-                    onChange={(e) => setFormData({ ...formData, ticket_number: e.target.value.replace(/\D/g, '') })}
+                    onChange={(e) => setFormData({ ...formData, ticket_number: e.target.value.replace(/\D/g, '').substring(0, 13) })}
                   />
                   {formErrors.ticket_number && <span className="field-error">{formErrors.ticket_number}</span>}
                 </div>
@@ -2135,11 +2144,11 @@ export default function App() {
                   <label>Номер билета (13 цифр) *</label>
                   <input 
                     type="text" 
-                    maxLength="13"
+                    maxLength="18"
                     className="input-field" 
                     placeholder="Например: 6339413054870"
                     value={formData.ticket_number}
-                    onChange={(e) => setFormData({ ...formData, ticket_number: e.target.value.replace(/\D/g, '') })}
+                    onChange={(e) => setFormData({ ...formData, ticket_number: e.target.value.replace(/\D/g, '').substring(0, 13) })}
                   />
                   {formErrors.ticket_number && <span className="field-error">{formErrors.ticket_number}</span>}
                 </div>
