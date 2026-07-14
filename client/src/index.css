@@ -506,7 +506,11 @@ h1, h2, h3, h4, h5, h6 {
   background-color: rgba(239, 68, 68, 0.08);
 }
 
-/* Global Sticky Actions Column */
+.refunds-table tbody tr.warning-row:hover td:last-child {
+  background-color: #2e202e !important;
+}
+
+/* Global Sticky Actions Column (Last Column) */
 .refunds-table th:last-child,
 .refunds-table td:last-child {
   position: sticky;
@@ -529,6 +533,32 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .refunds-table tbody tr.warning-row:hover td:last-child {
+  background-color: #2e202e !important;
+}
+
+/* Global Sticky Status Column (Second to Last Column) */
+.refunds-table th:nth-last-child(2),
+.refunds-table td:nth-last-child(2) {
+  position: sticky;
+  right: 160px; /* Width of the last column */
+  z-index: 9;
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--border-color); /* Separation border */
+}
+
+.refunds-table th:nth-last-child(2) {
+  background-color: #121824;
+}
+
+.refunds-table tbody tr:hover td:nth-last-child(2) {
+  background-color: var(--bg-hover) !important;
+}
+
+.refunds-table tbody tr.warning-row td:nth-last-child(2) {
+  background-color: #241c24 !important;
+}
+
+.refunds-table tbody tr.warning-row:hover td:nth-last-child(2) {
   background-color: #2e202e !important;
 }
 
@@ -1053,6 +1083,11 @@ h1, h2, h3, h4, h5, h6 {
     width: 140px;
     min-width: 140px;
   }
+
+  /* Adjust sticky position of the status column to align with the narrower actions column */
+  .refunds-table th:nth-last-child(2), .refunds-table td:nth-last-child(2) {
+    right: 140px;
+  }
 }
 
 /* --- STANDARD LAPTOPS (1280px and below) --- */
@@ -1178,6 +1213,11 @@ h1, h2, h3, h4, h5, h6 {
   .refunds-table th:nth-child(10), .refunds-table td:nth-child(10) {
     width: 120px;
     min-width: 120px;
+  }
+
+  /* Adjust sticky position of the status column at this breakpoint */
+  .refunds-table th:nth-last-child(2), .refunds-table td:nth-last-child(2) {
+    right: 120px;
   }
 }
 
