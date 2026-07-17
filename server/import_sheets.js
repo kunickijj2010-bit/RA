@@ -621,6 +621,10 @@ async function run() {
           isArchived = true;
         }
 
+        const opUser = dbUsers.find(u => u.full_name && u.full_name.toLowerCase().trim() === requestedBy.toLowerCase().trim());
+        const operatorRocketChat = opUser ? opUser.rocketchat_username : null;
+        const operatorEmail = opUser ? opUser.email : null;
+
         const refundApplication = {
           ticket_number: ticketNum,
           system_type: tab.systemType,
@@ -631,6 +635,8 @@ async function run() {
           agent_refund_equivalent: agentRefundEquivalent,
           agent_name: colAgent !== -1 && row[colAgent] ? row[colAgent].trim() : 'Неизвестный агент',
           requested_by: requestedBy,
+          operator_rocketchat: operatorRocketChat,
+          operator_email: operatorEmail,
           status,
           status_updated_at: colStatusDate !== -1 && row[colStatusDate] ? parseDate(row[colStatusDate]) : requestDate,
           support_ticket: colOtrs !== -1 && row[colOtrs] ? row[colOtrs].trim().replace(/\D/g, '') || '0' : '0',

@@ -104,7 +104,8 @@ async function runScheduler() {
           operatorRocketChat,
           operatorName,
           amount,
-          currency
+          currency,
+          raNumber: row.bsp_request_number || row.tch_request_number || 'нет'
         });
         console.log(`✅ Alert notifications successfully sent for ticket ${ticketNumber}`);
       } catch (notifErr) {
