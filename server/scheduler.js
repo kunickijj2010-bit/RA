@@ -105,7 +105,8 @@ async function runScheduler() {
           operatorName,
           amount,
           currency,
-          raNumber: row.bsp_request_number || row.tch_request_number || 'нет'
+          raNumber: row.bsp_request_number || row.tch_request_number || 'нет',
+          supportTicket: row.support_ticket
         });
         console.log(`✅ Alert notifications successfully sent for ticket ${ticketNumber}`);
       } catch (notifErr) {

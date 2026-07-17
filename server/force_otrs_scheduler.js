@@ -122,7 +122,8 @@ async function run() {
           operatorName,
           amount,
           currency,
-          raNumber: row.bsp_request_number || row.tch_request_number || 'нет'
+          raNumber: row.bsp_request_number || row.tch_request_number || 'нет',
+          supportTicket: row.support_ticket
         });
         sentCount++;
       } catch (err) {

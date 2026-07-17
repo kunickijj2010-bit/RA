@@ -94,6 +94,30 @@ function mapStatus(statusStr) {
   return 'Создан';
 }
 
+// Check if a status string contains recognized status keywords
+function isRecognizedStatus(s) {
+  if (!s) return false;
+  const val = s.toLowerCase().trim();
+  return (
+    val.includes('расхожд') ||
+    val.includes('отклон') ||
+    val.includes('отказ') ||
+    val.includes('выполнен') ||
+    val.includes('gds') ||
+    val.includes('гдс') ||
+    val.includes('отозван') ||
+    val.includes('приостановлен') ||
+    val.includes('провер') ||
+    val.includes('авториз') ||
+    val === 'ок' ||
+    val === 'ok' ||
+    val.includes('проведен') ||
+    val.includes('принят') ||
+    val.includes('положительно') ||
+    val === 'асм'
+  );
+}
+
 // Clean and normalize operator names to prevent duplicate user creation due to initials or typos
 function cleanOperatorName(name) {
   if (!name) return 'Система';
@@ -591,7 +615,7 @@ async function run() {
 
         // If status cell has a long note or describes future action ("будет"), move it to comments
         const sLower = rawStatus.toLowerCase().trim();
-        const isCustomComment = sLower.includes('будет') || sLower.length > 25;
+        const isCustomComment = (sLower.includes('будет') || sLower.length > 25) && !isRecognizedStatus(sLower);
 
         if (isCustomComment && rawStatus.trim() !== '') {
           status = 'Создан';

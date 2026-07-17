@@ -250,14 +250,15 @@ async function notifyStatusChange({ ticketNumber, oldStatus, newStatus, changedB
 }
 
 // 5. Combined Notification Trigger for Inactivity Warning (3 months)
-async function notifyInactivity({ ticketNumber, daysInactive, operatorEmail, operatorRocketChat, operatorName, amount, currency, raNumber }) {
+async function notifyInactivity({ ticketNumber, daysInactive, operatorEmail, operatorRocketChat, operatorName, amount, currency, raNumber, supportTicket }) {
   let mention = '';
   if (operatorRocketChat) {
     mention = operatorRocketChat.startsWith('@') ? `${operatorRocketChat} ` : `@${operatorRocketChat} `;
   }
   const raText = raNumber && raNumber !== 'нет' ? `\nНомер RA: \`${raNumber}\`` : '';
+  const otrsText = supportTicket && supportTicket !== '0' ? `\nНомер OTRS: \`${supportTicket}\`` : '';
   const rcMessage = `⚠️ *ПРЕДУПРЕЖДЕНИЕ О ПРОСТОЕ!*\n` +
-                    `${mention}Билет: \`${ticketNumber}\` (${amount} ${currency})${raText}\n` +
+                    `${mention}Билет: \`${ticketNumber}\` (${amount} ${currency})${raText}${otrsText}\n` +
                     `Статус не менялся уже *${daysInactive} дней*.\n` +
                     `Требуется проверка!`;
 
