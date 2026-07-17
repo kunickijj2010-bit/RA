@@ -83,6 +83,10 @@ async function sendRocketChatNotification(message, recipient, customSettings, ti
   const rcToken = config.rocketchat_token;
   const rcUser = config.rocketchat_user;
   let rcChannel = recipient || config.rocketchat_channel || '#refund-alerts';
+  
+  if (rcChannel === '@otrs_reminders' || rcChannel === 'otrs_reminders') {
+    rcChannel = '#otrs_reminders';
+  }
 
   // Auto-prepend '@' for usernames if missing prefix
   if (rcChannel && !rcChannel.startsWith('#') && !rcChannel.startsWith('@')) {
@@ -267,6 +271,17 @@ async function notifyInactivity({ ticketNumber, daysInactive, operatorEmail, ope
   `;
 
   const inAppMessage = `Внимание! Нет изменений статуса более ${daysInactive} дней! (${amount} ${currency})`;
+
+  const isOtrs = operatorRocketChat && (operatorRocketChat === '@otrs_reminders' || operatorRocketChat === 'otrs_reminders');
+
+  if (!isOtrs) {
+    console.log(`ℹ️ [NotificationBypassed] Ticket ${ticketNumber}: Inactivity notification for ${operatorName} (${operatorRocketChat || 'no RC'}) skipped (disabled in testing mode).`);
+    await Promise.all([
+      logNotificationToDb({ ticketNumber, recipient: operatorEmail || 'no-email', channel: 'email', status: 'disabled_test_mode' }),
+      logNotificationToDb({ ticketNumber, recipient: operatorRocketChat || 'no-rc', channel: 'rocketchat', status: 'disabled_test_mode' })
+    ]);
+    return;
+  }
 
   await Promise.all([
     operatorEmail ? sendEmailNotification(operatorEmail, emailSubject, emailHtml, null, ticketNumber).catch(e => console.error("Email warn err:", e.message)) : Promise.resolve(),

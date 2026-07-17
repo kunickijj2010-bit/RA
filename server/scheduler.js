@@ -12,20 +12,36 @@ async function runScheduler() {
     await initDb();
     
     // Find tickets in intermediate statuses 
-    // where status_updated_at is older than 90 days (3 months)
+    // where request_date is older than 90 days (3 months)
+    // but younger than 2 years (730 days)
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const dateStr = ninetyDaysAgo.toISOString().split('T')[0];
+
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setDate(twoYearsAgo.getDate() - 730);
+    const maxAgeDateStr = twoYearsAgo.toISOString().split('T')[0];
 
     const { data: rows, error: refErr } = await db
       .from('refund_applications')
       .select('*')
       .in('status', ['Создан', 'На проверке'])
       .eq('is_archived', false)
-      .lte('request_date', dateStr);
+      .lte('request_date', dateStr)
+      .gte('request_date', maxAgeDateStr);
 
     if (refErr) {
       console.error("❌ Scheduler DB error:", refErr);
+      process.exit(1);
+    }
+
+    // Fetch all users to resolve their contact details dynamically
+    const { data: dbUsers, error: usersErr } = await db
+      .from('users')
+      .select('username, full_name, email, rocketchat_username');
+    
+    if (usersErr) {
+      console.error("❌ Scheduler users query error:", usersErr);
       process.exit(1);
     }
 
@@ -34,8 +50,19 @@ async function runScheduler() {
     for (const row of rows) {
       const ticketNumber = row.ticket_number;
       const operatorName = row.requested_by;
-      const operatorEmail = row.operator_email;
-      const operatorRocketChat = row.operator_rocketchat;
+      
+      let operatorEmail = row.operator_email;
+      let operatorRocketChat = row.operator_rocketchat;
+
+      // Lookup dynamically in users table to get correct contact info
+      if (operatorName) {
+        const opUser = dbUsers.find(u => u.full_name.toLowerCase().trim() === operatorName.toLowerCase().trim());
+        if (opUser) {
+          if (!operatorRocketChat) operatorRocketChat = opUser.rocketchat_username;
+          if (!operatorEmail) operatorEmail = opUser.email;
+        }
+      }
+
       const amount = row.amount;
       const currency = row.currency;
 
