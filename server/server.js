@@ -111,7 +111,7 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
         {
           username: username.toLowerCase().trim(),
           password_hash,
-          full_name: cleanOperatorName(full_name),
+          full_name: full_name.trim(),
           email: email || null,
           rocketchat_username: rocketchat_username || null,
           role
@@ -145,7 +145,7 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const updateData = {
       username: username.toLowerCase().trim(),
-      full_name: cleanOperatorName(full_name),
+      full_name: full_name.trim(),
       email: email || null,
       rocketchat_username: rocketchat_username || null,
       role,

@@ -209,6 +209,8 @@ function cleanOperatorName(name) {
     'Алексеева': 'Москвитина',
     'Волковат': 'Волкова',
     'Ееменко': 'Еременко',
+    'Панченко': 'Прокуда',
+    'Вахрамеева': 'Токарева',
   };
 
   if (typoMap[firstWord]) {
@@ -439,6 +441,18 @@ async function run() {
   const existingUsernames = new Set(dbUsers.map(u => u.username));
   const existingFullNames = new Set(dbUsers.map(u => cleanOperatorName(u.full_name)));
 
+  // Build a map: cleaned surname -> full_name in DB (to preserve manually-set full names)
+  const surnameToFullName = {};
+  for (const u of dbUsers) {
+    if (u.full_name) {
+      const cleanedSurname = cleanOperatorName(u.full_name);
+      // Prefer entries with full name (Фамилия Имя) over surname-only
+      if (!surnameToFullName[cleanedSurname] || u.full_name.includes(' ')) {
+        surnameToFullName[cleanedSurname] = u.full_name;
+      }
+    }
+  }
+
   const newOperators = new Set();
   const rawApplications = [];
 
@@ -666,9 +680,18 @@ async function run() {
           isArchived = true;
         }
 
-        const opUser = dbUsers.find(u => u.full_name && u.full_name.toLowerCase().trim() === requestedBy.toLowerCase().trim());
+        // Look up the user by cleaned surname match (handles both 'Прокуда' and 'Прокуда Ирина')
+        const opUser = dbUsers.find(u => u.full_name && (
+          u.full_name.toLowerCase().trim() === requestedBy.toLowerCase().trim() ||
+          cleanOperatorName(u.full_name).toLowerCase() === requestedBy.toLowerCase().trim()
+        ));
         const operatorRocketChat = opUser ? opUser.rocketchat_username : null;
         const operatorEmail = opUser ? opUser.email : null;
+
+        // Use the full name from DB if the user has one (preserves manually-set 'Фамилия Имя')
+        const resolvedRequestedBy = (opUser && opUser.full_name && opUser.full_name.includes(' '))
+          ? opUser.full_name.split(' ').slice(0, 2).join(' ')
+          : requestedBy;
 
         const refundApplication = {
           ticket_number: ticketNum,
@@ -679,7 +702,7 @@ async function run() {
           currency,
           agent_refund_equivalent: agentRefundEquivalent,
           agent_name: colAgent !== -1 && row[colAgent] ? row[colAgent].trim() : 'Неизвестный агент',
-          requested_by: requestedBy,
+          requested_by: resolvedRequestedBy,
           operator_rocketchat: operatorRocketChat,
           operator_email: operatorEmail,
           status,
@@ -828,13 +851,24 @@ async function run() {
           toInsert.push(app);
         } else {
           // Check if fields changed
+          // For requested_by: don't consider it changed if the DB has a full name
+          // and the sheet value is just the surname portion of it
+          const requestedByChanged = (() => {
+            if (app.requested_by === dbApp.requested_by) return false;
+            // If DB has full name and app has just the surname, it's not a real change
+            const dbSurname = cleanOperatorName(dbApp.requested_by);
+            const appSurname = cleanOperatorName(app.requested_by);
+            if (dbSurname === appSurname) return false;
+            return true;
+          })();
+
           const hasChanged = 
             app.status !== dbApp.status ||
             app.amount !== dbApp.amount ||
             app.currency !== dbApp.currency ||
             app.is_archived !== dbApp.is_archived ||
             app.agent_name !== dbApp.agent_name ||
-            app.requested_by !== dbApp.requested_by ||
+            requestedByChanged ||
             (app.agent_refund_equivalent !== null && dbApp.agent_refund_equivalent !== null ? 
              Math.abs(app.agent_refund_equivalent - dbApp.agent_refund_equivalent) > 0.01 : 
              app.agent_refund_equivalent !== dbApp.agent_refund_equivalent) ||
