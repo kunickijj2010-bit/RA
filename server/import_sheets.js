@@ -213,6 +213,15 @@ function cleanOperatorName(name) {
     'Вахрамеева': 'Вахрамеева',
     'Токарева': 'Вахрамеева',
     'Кучерова': 'Мазярова',
+    'Alimov': 'Алимов',
+    'Berdnikova': 'Бердникова',
+    'Shcherbakova': 'Щербакова',
+    'Scherbakova': 'Щербакова',
+    'Derienko': 'Дериенко',
+    'Karyzheskaya': 'Карыжеская',
+    'Korzinkina': 'Корзинкина',
+    'Torshin': 'Торшин',
+    'Loueri': 'Лоуери',
   };
 
   if (typoMap[firstWord]) {
@@ -1035,7 +1044,7 @@ const CANONICAL_USERS = {
   '@al.scherbakova': {
     keep: 'sysoeva',
     fullName: 'Щербакова Александра',
-    aliases: ['Сысоева', 'Cысоева']
+    aliases: ['Щербакова', 'Shcherbakova', 'Scherbakova', 'Сысоева', 'Cысоева']
   },
   '@e.pischulina': {
     keep: 'pishchulina',
@@ -1106,6 +1115,16 @@ const CANONICAL_USERS = {
     keep: 'eremenko',
     fullName: 'Еременко Александр',
     aliases: ['Еременко', 'Ееменко']
+  },
+  '@i.alimov': {
+    keep: 'alimov',
+    fullName: 'Алимов Искандер',
+    aliases: ['Алимов', 'Alimov']
+  },
+  '@o.vasilieva': {
+    keep: 'berdnikova',
+    fullName: 'Бердникова Оксана',
+    aliases: ['Бердникова', 'Berdnikova', 'Васильева']
   }
 };
 
@@ -1144,8 +1163,22 @@ async function autoMergeDuplicates() {
     // Find duplicate accounts
     const duplicates = allUsers.filter(u => {
       if (u.id === keepUser.id) return false;
+
+      // Match by RocketChat username (ignoring @ prefix and case)
+      if (u.rocketchat_username && keepUser.rocketchat_username) {
+        const uRc = u.rocketchat_username.toLowerCase().replace(/^@/, '').trim();
+        const targetRc = keepUser.rocketchat_username.toLowerCase().replace(/^@/, '').trim();
+        if (uRc && uRc === targetRc) return true;
+      }
+
+      // Match by username starting with config.keep
+      if (u.username.toLowerCase().startsWith(config.keep.toLowerCase()) && u.username.length > config.keep.length) {
+        return true;
+      }
+
+      // Match by full_name cleaned surname matching aliases
       const cleanName = cleanOperatorName(u.full_name);
-      return config.aliases.some(a => a.toLowerCase() === cleanName.toLowerCase());
+      return config.aliases.some(a => cleanOperatorName(a).toLowerCase() === cleanName.toLowerCase() || a.toLowerCase() === u.full_name.toLowerCase());
     });
 
     // Reassociate RAs from aliases to canonical full name
