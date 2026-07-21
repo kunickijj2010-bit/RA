@@ -143,9 +143,18 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 
   try {
+    // Fetch old user data before update (to detect name change)
+    const { data: oldUser } = await db
+      .from('users')
+      .select('full_name, rocketchat_username')
+      .eq('id', id)
+      .single();
+
+    const newFullName = full_name.trim();
+
     const updateData = {
       username: username.toLowerCase().trim(),
-      full_name: full_name.trim(),
+      full_name: newFullName,
       email: email || null,
       rocketchat_username: rocketchat_username || null,
       role,
@@ -169,6 +178,39 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: "Пользователь с таким логином уже существует." });
       }
       throw error;
+    }
+
+    // Auto-reassociate RAs when full_name changes
+    if (oldUser && oldUser.full_name !== newFullName) {
+      const oldSurname = oldUser.full_name ? oldUser.full_name.split(' ')[0] : null;
+      const raUpdateData = { requested_by: newFullName };
+      if (rocketchat_username) {
+        raUpdateData.operator_rocketchat = rocketchat_username;
+      }
+
+      // Update RAs matching old full name
+      await db.from('refund_applications')
+        .update(raUpdateData)
+        .eq('requested_by', oldUser.full_name);
+
+      // Update RAs matching old surname (if different from old full name)
+      if (oldSurname && oldSurname !== oldUser.full_name) {
+        await db.from('refund_applications')
+          .update(raUpdateData)
+          .eq('requested_by', oldSurname);
+      }
+
+      // Update status_history
+      await db.from('status_history')
+        .update({ changed_by: newFullName })
+        .eq('changed_by', oldUser.full_name);
+      if (oldSurname && oldSurname !== oldUser.full_name) {
+        await db.from('status_history')
+          .update({ changed_by: newFullName })
+          .eq('changed_by', oldSurname);
+      }
+
+      console.log(`📝 Auto-reassociated RAs: "${oldUser.full_name}" → "${newFullName}"`);
     }
 
     res.json(updatedUser);
