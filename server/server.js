@@ -209,7 +209,14 @@ function applyFilters(query, req) {
   const onlyMine = req.query.only_mine === 'true';
 
   if (onlyMine && req.user) {
-    query = query.eq('requested_by', req.user.full_name);
+    const fullName = req.user.full_name;
+    const surname = fullName.split(' ')[0];
+    if (fullName !== surname) {
+      // Match by full name OR surname-only (for legacy data)
+      query = query.or(`requested_by.eq.${fullName},requested_by.eq.${surname}`);
+    } else {
+      query = query.eq('requested_by', fullName);
+    }
   }
 
   if (search) {
