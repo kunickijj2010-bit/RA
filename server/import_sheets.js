@@ -202,7 +202,7 @@ function cleanOperatorName(name) {
     'Нормухмаедов': 'Нормухамедов',
     'Савиткина': 'Пронина',
     'Щетинини': 'Щетинин',
-    'Мазярова': 'Кучерова',
+    'Мазярова': 'Мазярова',
     'Васинасо': 'Васина',
     'Маммедова': 'Литус',
     'Маммедов': 'Литус',
@@ -210,7 +210,9 @@ function cleanOperatorName(name) {
     'Волковат': 'Волкова',
     'Ееменко': 'Еременко',
     'Панченко': 'Прокуда',
-    'Вахрамеева': 'Токарева',
+    'Вахрамеева': 'Вахрамеева',
+    'Токарева': 'Вахрамеева',
+    'Кучерова': 'Мазярова',
   };
 
   if (typoMap[firstWord]) {
@@ -975,6 +977,9 @@ async function run() {
     console.log(`   Updated (changed): ${updatedCount}`);
     console.log(`   Skipped (no change): ${skippedCount}`);
 
+    // Auto-merge duplicate users after import
+    await autoMergeDuplicates();
+
     return {
       processed: deDuplicatedApplications.length,
       inserted: insertedCount,
@@ -995,3 +1000,196 @@ module.exports = {
   run,
   cleanOperatorName
 };
+
+// =============================================
+// CANONICAL_USERS: Auto-merge map
+// Maps rocket_chat_username -> canonical user info
+// After each import, duplicates are automatically merged
+// =============================================
+const CANONICAL_USERS = {
+  '@i.prokuda': {
+    keep: 'prokuda',
+    fullName: 'Прокуда Ирина',
+    aliases: ['Прокуда', 'Панченко']
+  },
+  '@a.vahrameeva': {
+    keep: 'tokareva',
+    fullName: 'Вахрамеева Анна',
+    aliases: ['Токарева', 'Вахрамеева']
+  },
+  '@i.sheina': {
+    keep: 'sheina',
+    fullName: 'Шеина Ирина',
+    aliases: ['Шеина', 'Большакова']
+  },
+  '@s.mirdzhalilova': {
+    keep: 'mirdzhalilova',
+    fullName: 'Мирджалилова Саида',
+    aliases: ['Мирджалилова', 'Мерджалилова']
+  },
+  '@e.melyakova': {
+    keep: 'melyakova',
+    fullName: 'Мелякова Екатерина',
+    aliases: ['Мелякова', 'Катя']
+  },
+  '@al.scherbakova': {
+    keep: 'sysoeva',
+    fullName: 'Щербакова Александра',
+    aliases: ['Сысоева', 'Cысоева']
+  },
+  '@e.pischulina': {
+    keep: 'pishchulina',
+    fullName: 'Пищулина Елена',
+    aliases: ['Пищулина', 'Пищулипа']
+  },
+  '@a.krasnova': {
+    keep: 'krasnova',
+    fullName: 'Краснова Анна',
+    aliases: ['Краснова', 'Крансова']
+  },
+  '@v.kostousova': {
+    keep: 'kostousova',
+    fullName: 'Костоусова Вера',
+    aliases: ['Костоусова', 'Котсоусова']
+  },
+  '@s.kazhanova': {
+    keep: 'kazhanova',
+    fullName: 'Кажанова Светлана',
+    aliases: ['Кажанова', 'Кжанова']
+  },
+  '@e.devyatova': {
+    keep: 'bogdanova',
+    fullName: 'Богданова Елена',
+    aliases: ['Девятова', 'Девятовв', 'Богданова']
+  },
+  '@t.normukhamedov': {
+    keep: 'normukhamedov',
+    fullName: 'Нормухамедов Тимур',
+    aliases: ['Нормухамедов', 'Нормухмаедов']
+  },
+  '@j.pronina': {
+    keep: 'pronina',
+    fullName: 'Пронина Юлия',
+    aliases: ['Пронина', 'Савиткина']
+  },
+  '@a.schetinin': {
+    keep: 'shchetinin',
+    fullName: 'Щетинин Александр',
+    aliases: ['Щетинин', 'Щетинини']
+  },
+  '@t.kucherova': {
+    keep: 'kucherova',
+    fullName: 'Мазярова Татьяна',
+    aliases: ['Кучерова', 'Мазярова']
+  },
+  '@s.vasina': {
+    keep: 'vasina',
+    fullName: 'Васина Светлана',
+    aliases: ['Васина', 'Васинасо']
+  },
+  '@e.litus': {
+    keep: 'litus',
+    fullName: 'Литус Екатерина',
+    aliases: ['Литус', 'Маммедова', 'Маммедов']
+  },
+  '@i.alekseeva': {
+    keep: 'moskvitina',
+    fullName: 'Москвитина Ирина',
+    aliases: ['Москвитина', 'Алексеева']
+  },
+  '@t.volkova': {
+    keep: 'volkova',
+    fullName: 'Волкова Татьяна',
+    aliases: ['Волкова', 'Волковат']
+  },
+  '@a.eremenko': {
+    keep: 'eremenko',
+    fullName: 'Еременко Александр',
+    aliases: ['Еременко', 'Ееменко']
+  }
+};
+
+/**
+ * Auto-merge: runs after each import to delete duplicate user accounts
+ * and reassociate their RAs to the canonical user.
+ */
+async function autoMergeDuplicates() {
+  console.log('\n🔄 Running auto-merge of duplicate users...');
+  const { data: allUsers, error: usersErr } = await db.from('users').select('*');
+  if (usersErr) {
+    console.error('❌ Failed to fetch users for auto-merge:', usersErr.message);
+    return;
+  }
+
+  let totalDeleted = 0;
+  let totalRAsUpdated = 0;
+
+  for (const [rc, config] of Object.entries(CANONICAL_USERS)) {
+    const keepUser = allUsers.find(u => u.username === config.keep);
+    if (!keepUser) continue;
+
+    // Update canonical full_name if needed
+    if (keepUser.full_name !== config.fullName) {
+      const { error: updErr } = await db
+        .from('users')
+        .update({ full_name: config.fullName })
+        .eq('id', keepUser.id);
+      if (updErr) {
+        console.error(`  ❌ Failed to update name for ${config.keep}:`, updErr.message);
+      } else {
+        console.log(`  ✅ Updated ${config.keep} name: "${keepUser.full_name}" → "${config.fullName}"`);
+      }
+    }
+
+    // Find duplicate accounts
+    const duplicates = allUsers.filter(u => {
+      if (u.id === keepUser.id) return false;
+      const cleanName = cleanOperatorName(u.full_name);
+      return config.aliases.some(a => a.toLowerCase() === cleanName.toLowerCase());
+    });
+
+    // Reassociate RAs from aliases to canonical full name
+    for (const alias of config.aliases) {
+      const { data: ras } = await db
+        .from('refund_applications')
+        .select('id')
+        .eq('requested_by', alias);
+
+      if (ras && ras.length > 0) {
+        const { error: raErr } = await db
+          .from('refund_applications')
+          .update({
+            requested_by: config.fullName,
+            operator_rocketchat: rc
+          })
+          .eq('requested_by', alias);
+
+        if (!raErr) {
+          totalRAsUpdated += ras.length;
+        }
+      }
+
+      // Also reassociate status_history
+      await db
+        .from('status_history')
+        .update({ changed_by: config.fullName })
+        .eq('changed_by', alias);
+    }
+
+    // Delete duplicate user accounts
+    if (duplicates.length > 0) {
+      const deleteIds = duplicates.map(d => d.id);
+      const { error: delErr } = await db
+        .from('users')
+        .delete()
+        .in('id', deleteIds);
+
+      if (!delErr) {
+        totalDeleted += deleteIds.length;
+        console.log(`  🗑️ Deleted ${deleteIds.length} duplicate(s) for ${config.fullName}: ${duplicates.map(d => d.full_name).join(', ')}`);
+      }
+    }
+  }
+
+  console.log(`🔄 Auto-merge complete: ${totalDeleted} duplicates deleted, ${totalRAsUpdated} RAs reassociated.`);
+}

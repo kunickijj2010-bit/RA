@@ -20,7 +20,7 @@ const MERGE_MAP = {
   },
   '@a.vahrameeva': {
     keep: 'tokareva',
-    fullName: 'Токарева Анна',
+    fullName: 'Вахрамеева Анна',
     aliases: ['Токарева', 'Вахрамеева']
   },
   '@i.sheina': {
@@ -85,7 +85,7 @@ const MERGE_MAP = {
   },
   '@t.kucherova': {
     keep: 'kucherova',
-    fullName: 'Кучерова Татьяна',
+    fullName: 'Мазярова Татьяна',
     aliases: ['Кучерова', 'Мазярова']
   },
   '@s.vasina': {
